@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>3D Heart Vortex + "I LOVE YOU" overlay (VI + Heart Points)</title>
+<title>3D Heart Vortex + "I LOVE YOU" overlay</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#000}
 
-  /* ===== Panel điều khiển (Việt hoá) ===== */
+  /* ===== Panel gốc của bạn ===== */
   #ui{
     position:fixed;left:12px;top:12px;z-index:9;
     background:rgba(20,20,20,.55);border:1px solid #2a2a2a;border-radius:10px;
-    padding:10px;color:#ddd;font:12px/1.2 system-ui,Arial;min-width:280px
+    padding:10px;color:#ddd;font:12px/1.2 system-ui,Arial;min-width:260px
   }
   #ui .row{display:flex;gap:8px;align-items:center;margin:6px 0}
   #ui input[type=range]{flex:1}
@@ -19,42 +19,39 @@
 
   /* ===== Overlay LOVE (đặt trên cùng) ===== */
   #love-wrap{
-    position:fixed;inset:0 auto auto 0;
-    width:100%;pointer-events:none;
+    position:fixed;inset:0 auto auto 0; /* top-left */
+    width:100%;pointer-events:none; /* không chặn UI gốc */
     z-index:20;display:flex;justify-content:center;align-items:flex-start;
     padding-top:10px;
   }
-  .love-container{width:min(500px,92vw);height:auto;aspect-ratio:500/200;position:relative}
+  .love-container{
+    width:min(500px,92vw);height:auto;aspect-ratio:500/200;position:relative;
+  }
   .love-svg{position:absolute;inset:0;z-index:2}
   .love-mo{width:100%;height:100%}
 
+  /* Style từ demo gốc, tinh chỉnh màu để nổi trên nền đen */
   .love-line{fill:none;stroke:#ffffff;stroke-width:8;stroke-linecap:round;stroke-miterlimit:10}
-  .love-letter{fill:#f2a9ff}
+  .love-letter{fill:#f2a9ff} /* tím hồng sáng hơn cho nền đen */
+  .love-sound{
+    position:fixed;color:#f2a9ff;font-size:14px;bottom:10px;right:12px;
+    text-decoration:underline;cursor:default;z-index:25;pointer-events:auto; /* cho phép click */
+  }
+  .love-sound.sound--off{text-decoration:line-through}
 </style>
 </head>
 <body>
-<!-- ===== Panel điều khiển ===== -->
+<!-- ===== Panel điều khiển gốc ===== -->
 <div id="ui">
-  <div><b>3D Trái tim Vortex</b></div>
-  <div class="row"><span style="width:120px">Cường độ gió</span> <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.0"></div>
-  <div class="row"><span style="width:120px">Kích thước tim</span> <input id="hsize" type="range" min="1.6" max="4.0" step="0.1" value="2.6"></div>
-  <div class="row"><span style="width:120px">Giữ hình (giây)</span> <input id="hold" type="range" min="1" max="8" step="0.5" value="3.5"></div>
-  <div class="row"><span style="width:120px">% viền tim</span> <input id="edge" type="range" min="0" max="80" step="5" value="40"></div>
-
-  <div class="row"><span style="width:120px">Hình hạt</span>
-    <label><input type="radio" name="shape" value="heart" checked> Trái tim</label>
-    <label><input type="radio" name="shape" value="circle"> Hình tròn</label>
-  </div>
-
-  <div class="row">
-    <span style="width:120px">Hạt bám tim</span>
-    <input id="hpoints" type="range" min="400" max="7000" step="100" value="2600">
-    <span style="margin-left:6px" id="hpval">2,600</span>
-  </div>
-
-  <div class="row">
-    <span style="width:120px">Tổng hạt</span>
-    <span id="pcnt" style="font-variant-numeric:tabular-nums"></span>
+  <div><b>3D Heart Vortex</b></div>
+  <div class="row"><span style="width:86px">Strength</span> <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.0"></div>
+  <div class="row"><span style="width:86px">Heart size</span> <input id="hsize" type="range" min="1.6" max="4.0" step="0.1" value="2.6"></div>
+  <div class="row"><span style="width:86px">Hold (s)</span> <input id="hold" type="range" min="1" max="8" step="0.5" value="3.5"></div>
+  <div class="row"><span style="width:86px">Edge %</span> <input id="edge" type="range" min="0" max="80" step="5" value="40"></div>
+  <div class="row">Shape:
+    <label><input type="radio" name="shape" value="heart" checked> ❤</label>
+    <label><input type="radio" name="shape" value="circle"> ●</label>
+    <span style="margin-left:auto">Particles: <span id="pcnt"></span></span>
   </div>
 </div>
 
@@ -78,19 +75,21 @@
     <div class="love-mo"></div>
   </div>
 </div>
+<div class="love-sound">sound</div>
 
-<!-- ===== Three.js ===== -->
+<!-- ===== Three.js (gốc của bạn) ===== -->
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+
 <!-- ===== mo.js cho hiệu ứng chữ ===== -->
 <script src="https://cdn.jsdelivr.net/mojs/latest/mo.min.js"></script>
 
 <script>
 /* =========================
-   PHẦN 1: Three.js vortex
+   PHẦN 1: Three.js vortex gốc
    ========================= */
 let SPRITE_SHAPE = 'heart';
-const TOTAL = 3600;                              // tổng số hạt (giữ cố định)
-let HEART_POINT_COUNT = 2600;                    // số hạt bám hình tim (có slider)
+const TOTAL = 3600;
+let HEART_POINT_COUNT = 2600;
 let HEART_SCALE = 2.6;
 const HEART_YOFFSET = 38;
 
@@ -146,7 +145,6 @@ function buildHeartTargets(count, scale=HEART_SCALE, yOffset=HEART_YOFFSET, edge
 let heartTargets = buildHeartTargets(HEART_POINT_COUNT);
 
 document.getElementById('pcnt').textContent = TOTAL.toLocaleString();
-
 const positions = new Float32Array(TOTAL*3);
 const colors    = new Float32Array(TOTAL*3);
 const state = new Array(TOTAL);
@@ -154,11 +152,9 @@ const vel   = new Array(TOTAL);
 const targetIndex = new Array(TOTAL);
 const boundAge = new Float32Array(TOTAL);
 const boundMin = new Float32Array(TOTAL);
-
 const blue = new THREE.Color('#66ccff');
 const gold = new THREE.Color('#ffd34d');
 const red  = new THREE.Color('#ff3a6a');
-
 const bottomY=-40, floorY=-55, vortexY=-10, radiusX=90, radiusZ=80;
 const gravity=-25, swirlBase=1.65, updraft=30;
 
@@ -203,8 +199,6 @@ const strengthEl=document.getElementById('strength');
 const sizeEl=document.getElementById('hsize');
 const holdEl=document.getElementById('hold');
 const edgeEl=document.getElementById('edge');
-const hpointsEl=document.getElementById('hpoints');
-const hpvalEl=document.getElementById('hpval');
 
 function animate(now){
   requestAnimationFrame(animate);
@@ -271,14 +265,10 @@ function animate(now){
 
   geo.attributes.position.needsUpdate = true;
   geo.attributes.color.needsUpdate = true;
-
-  // kích thước sprite theo Heart size
   points.material.size = 10 + (HEART_SCALE-2.4)*2;
-
   renderer.render(scene, camera);
 }
 
-/* ===== UI events ===== */
 document.querySelectorAll('input[name="shape"]').forEach(r=>{
   r.onchange=()=>{
     SPRITE_SHAPE=r.value;
@@ -293,153 +283,181 @@ sizeEl.oninput=()=>{
 edgeEl.oninput=()=>{
   heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
 };
-hpointsEl.oninput=()=>{
-  // Đảm bảo không vượt quá TOTAL và không quá thấp
-  HEART_POINT_COUNT = Math.max(100, Math.min(TOTAL-100, parseInt(hpointsEl.value,10) || 0));
-  hpvalEl.textContent = HEART_POINT_COUNT.toLocaleString();
-  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
-};
-
 requestAnimationFrame(animate);
 addEventListener('resize', ()=>{
   renderer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
 });
-</script>
 
-<script>
 /* =========================
-   PHẦN 2: mo.js "I LOVE YOU" (không sound)
+   PHẦN 2: Hiệu ứng mo.js "I LOVE YOU" (overlay)
    ========================= */
 (function(){
   const qs = (sel,root=document) => root.querySelector(sel);
-  const root = qs('#love-wrap');
-  const el = {
-    container: qs('.love-mo', root),
-    i: qs('.love-letter--I', root),
-    l: qs('.love-letter--L', root),
-    o: qs('.love-letter--O', root),
-    v: qs('.love-letter--V', root),
-    e: qs('.love-letter--E', root),
-    y: qs('.love-letter--Y', root),
-    o2: qs('.love-letter--O2', root),
-    u: qs('.love-letter--U', root),
-    lineLeft:  qs('.love-line--left', root),
-    lineRight: qs('.love-line--rght', root),
-    colTxt: "#f2a9ff",
-    colHeart: "#fa4843"
+  const loveEl = {
+    container: qs('.love-mo', qs('#love-wrap')),
+    i: qs('.love-letter--I'),
+    l: qs('.love-letter--L'),
+    o: qs('.love-letter--O'),
+    v: qs('.love-letter--V'),
+    e: qs('.love-letter--E'),
+    y: qs('.love-letter--Y'),
+    o2: qs('.love-letter--O2'),
+    u: qs('.love-letter--U'),
+    lineLeft: qs('.love-line--left'),
+    lineRight: qs('.love-line--rght'),
+    blup: new Audio('https://www.freesound.org/data/previews/265/265115_4373976-lq.mp3'),
+    blop: new Audio('https://www.freesound.org/data/previews/265/265115_4373976-lq.mp3'),
+    sound: qs('.love-sound'),
+    colTxt: "#f2a9ff",   // tím hồng sáng
+    colHeart: "#fa4843"  // đỏ trái tim
   };
 
   class Heart extends mojs.CustomShape {
-    getShape(){return '<path d="M50,88.9C25.5,78.2,0.5,54.4,3.8,31.1S41.3,1.8,50,29.9c8.7-28.2,42.8-22.2,46.2,1.2S74.5,78.2,50,88.9z"/>'; }
+    getShape(){return '<path d="M50,88.9C25.5,78.2,0.5,54.4,3.8,31.1S41.3,1.8,50,29.9c8.7-28.2,42.8-22.2,46.2,1.2S74.5,78.2,50,88.9z"/>';}
     getLength(){return 200;}
   }
   mojs.addShape('heart', Heart);
 
   const crtBoom = (delay=0, x=0, rd=46) => {
-    const parent = el.container;
+    const parent = loveEl.container;
     const crcl = new mojs.Shape({
-      shape:'circle', fill:'none', stroke:el.colTxt, strokeWidth:{5:0},
-      radius:{[rd]:[rd+20]}, easing:'quint.out', duration:500/3, parent, delay, x
+      shape:'circle',fill:'none',stroke:loveEl.colTxt,strokeWidth:{5:0},
+      radius:{[rd]:[rd+20]},easing:'quint.out',duration:500/3,parent,delay,x
     });
     const brst = new mojs.Burst({
       radius:{[rd+15]:110}, angle:'rand(60,180)', count:3, timeline:{delay}, parent, x,
-      children:{ radius:[5,3,7], fill:el.colTxt, scale:{1:0, easing:'quad.in'},
+      children:{ radius:[5,3,7], fill:loveEl.colTxt, scale:{1:0, easing:'quad.in'},
         pathScale:[.8,null], degreeShift:['rand(13,60)',null], duration:1000/3, easing:'quint.out'}
     });
     return [crcl, brst];
   };
 
-  const move=1000, boom=200, easing='sin.inOut', easingBoom='sin.in', easingOut='sin.out';
-  const opts={ duration:move, easing, opacity:1 }, delta=150;
+  const crtLoveTl = () => {
+    const move=1000, boom=200, easing='sin.inOut', easingBoom='sin.in', easingOut='sin.out';
+    const opts={ duration:move, easing, opacity:1 }, delta=150;
 
-  const tl = new mojs.Timeline().add([
-    new mojs.Tween({
-      duration: move,
-      onStart: ()=>[el.i,el.l,el.o,el.v,el.e,el.y,el.o2,el.u].forEach(n=>{ n.style.opacity=1; n.style.transform='translate(0,0)'; }),
-      onComplete: ()=>[el.l,el.o,el.v,el.e].forEach(n=> n.style.opacity=0)
-    }),
-    new mojs.Tween({
-      duration: move*2 + boom,
-      onComplete: ()=>[el.y,el.o2].forEach(n=> n.style.opacity=0)
-    }),
-    new mojs.Tween({
-      duration: move*3 + boom*2 - delta,
-      onComplete: ()=>{ el.i.style.opacity=0; }
-    }),
-    new mojs.Tween({
-      duration: move*3 + boom*2,
-      onComplete: ()=>{ el.u.style.opacity=0; }
-    }),
-    new mojs.Tween({
-      duration:50, delay:4050,
-      onUpdate:(p)=>[el.i,el.l,el.o,el.v,el.e,el.y,el.o2,el.u].forEach(n=> n.style.opacity=p),
-      onComplete: ()=>[el.i,el.l,el.o,el.v,el.e,el.y,el.o2,el.u].forEach(n=>{ n.style.opacity=1; n.style.transform='translate(0,0)'; })
-    }),
+    return new mojs.Timeline().add([
 
-    new mojs.Html({...opts, el:el.lineLeft,  x:{0:52}})
-      .then({duration:boom+move, easing, x:{to:52+54}})
-      .then({duration:boom+move, easing, x:{to:52+54+60}})
-      .then({duration:150, easing, x:{to:52+54+60+10}})
-      .then({duration:300})
-      .then({duration:350, x:{to:0}, easing:easingOut}),
+      new mojs.Tween({
+        duration: move,
+        onStart: ()=>{
+          [loveEl.i,loveEl.l,loveEl.o,loveEl.v,loveEl.e,loveEl.y,loveEl.o2,loveEl.u]
+          .forEach(n=>{ n.style.opacity=1; n.style.transform='translate(0,0)'; });
+        },
+        onComplete: ()=>{
+          [loveEl.l,loveEl.o,loveEl.v,loveEl.e].forEach(n=>n.style.opacity=0);
+          loveEl.blop.play();
+        }
+      }),
 
-    new mojs.Html({...opts, el:el.lineRight, x:{0:-52}})
-      .then({duration:boom+move, easing, x:{to:-52-54}})
-      .then({duration:boom+move, easing, x:{to:-52-54-60}})
-      .then({duration:150, easing, x:{to:-52-54-60-10}})
-      .then({duration:300})
-      .then({duration:350, x:{to:0}, easing:easingOut}),
+      new mojs.Tween({
+        duration: move*2 + boom,
+        onComplete: ()=>{
+          [loveEl.y,loveEl.o2].forEach(n=>n.style.opacity=0);
+          loveEl.blop.play();
+        }
+      }),
 
-    new mojs.Html({...opts, el:el.i,  x:{0:34}})
-      .then({duration:boom, easing:easingBoom, x:{to:34+19}})
-      .then({duration:move, easing, x:{to:34+19+40}})
-      .then({duration:boom, easing:easingBoom, x:{to:34+19+40+30}})
-      .then({duration:move, easing, x:{to:34+19+40+30+30}}),
+      new mojs.Tween({
+        duration: move*3 + boom*2 - delta,
+        onComplete: ()=>{ loveEl.i.style.opacity=0; loveEl.blop.play(); }
+      }),
 
-    new mojs.Html({...opts, el:el.l,  x:{0:15}}),
-    new mojs.Html({...opts, el:el.o,  x:{0:11}}),
-    new mojs.Html({...opts, el:el.v,  x:{0:3}}),
-    new mojs.Html({...opts, el:el.e,  x:{0:-3}}),
+      new mojs.Tween({
+        duration: move*3 + boom*2,
+        onComplete: ()=>{ loveEl.u.style.opacity=0; loveEl.blup.play(); }
+      }),
 
-    new mojs.Html({...opts, el:el.y,  x:{0:-20}})
-      .then({duration:boom, easing:easingBoom, x:{to:-20-33}})
-      .then({duration:move, easing, x:{to:-20-33-24}}),
+      new mojs.Tween({
+        duration:50, delay:4050,
+        onUpdate:(p)=>{
+          [loveEl.i,loveEl.l,loveEl.o,loveEl.v,loveEl.e,loveEl.y,loveEl.o2,loveEl.u]
+          .forEach(n=> n.style.opacity = p);
+        },
+        onComplete: ()=>{
+          [loveEl.i,loveEl.l,loveEl.o,loveEl.v,loveEl.e,loveEl.y,loveEl.o2,loveEl.u]
+          .forEach(n=>{ n.style.opacity=1; n.style.transform='translate(0,0)'; });
+        }
+      }),
 
-    new mojs.Html({...opts, el:el.o2, x:{0:-27}})
-      .then({duration:boom, easing:easingBoom, x:{to:-27-27}})
-      .then({duration:move, easing, x:{to:-27-27-30}}),
+      new mojs.Html({...opts, el:loveEl.lineLeft, x:{0:52}})
+        .then({duration:boom+move, easing, x:{to:52+54}})
+        .then({duration:boom+move, easing, x:{to:52+54+60}})
+        .then({duration:150, easing, x:{to:52+54+60+10}})
+        .then({duration:300})
+        .then({duration:350, x:{to:0}, easing:easingOut}),
 
-    new mojs.Html({...opts, el:el.u,  x:{0:-32}})
-      .then({duration:boom, easing:easingBoom, x:{to:-32-21}})
-      .then({duration:move, easing, x:{to:-32-21-36}})
-      .then({duration:boom, easing:eensingBoom, x:{to:-32-21-36-31}})
-      .then({duration:move, easing, x:{to:-32-21-36-31-27}}),
+      new mojs.Html({...opts, el:loveEl.lineRight, x:{0:-52}})
+        .then({duration:boom+move, easing, x:{to:-52-54}})
+        .then({duration:boom+move, easing, x:{to:-52-54-60}})
+        .then({duration:150, easing, x:{to:-52-54-60-10}})
+        .then({duration:300})
+        .then({duration:350, x:{to:0}, easing:easingOut}),
 
-    new mojs.Shape({
-      parent: el.container, shape:'heart', delay:move, fill:el.colHeart,
-      x:-64, scale:{0:0.95, easing: mojs.easing.path('M0,100C2.9,86.7,33.6-7.3,46-7.3s15.2,22.7,26,22.7S89,0,100,0')},
-      duration:500
-    })
-      .then({ x:{to:-62, easing:'sin.inOut'}, scale:{to:0.65, easing:'sin.inOut'}, duration:boom+move-500 })
-      .then({ duration:boom-50, x:{to:-62+48}, scale:{to:0.90}, easing:'sin.in' })
-      .then({ duration:125, scale:{to:0.8}, easing:'sin.out' })
-      .then({ duration:125, scale:{to:0.85}, easing:'sin.out' })
-      .then({ duration:move-200, scale:{to:0.45}, easing:'sin.inOut' })
-      .then({ delay:-75, duration:150, x:{to:0}, scale:{to:0.90}, easing:'sin.in' })
-      .then({ duration:125, scale:{to:0.8}, easing:'sin.out' })
-      .then({ duration:125, scale:{to:0.85}, easing:'sin.out' })
-      .then({ duration:125 })
-      .then({ duration:350, scale:{to:0}, easing:'sin.out' }),
+      new mojs.Html({...opts, el:loveEl.i, x:{0:34}})
+        .then({duration:boom, easing:easingBoom, x:{to:34+19}})
+        .then({duration:move, easing, x:{to:34+19+40}})
+        .then({duration:boom, easing:easingBoom, x:{to:34+19+40+30}})
+        .then({duration:move, easing, x:{to:34+19+40+30+30}}),
 
-    ...crtBoom(move, -64, 46),
-    ...crtBoom(move*2 + boom, 18, 34),
-    ...crtBoom(move*3 + boom*2 - 150, -64, 34),
-    ...crtBoom(move*3 + boom*2, 45, 34)
-  ]);
+      new mojs.Html({...opts, el:loveEl.l, x:{0:15}}),
+      new mojs.Html({...opts, el:loveEl.o, x:{0:11}}),
+      new mojs.Html({...opts, el:loveEl.v, x:{0:3}}),
+      new mojs.Html({...opts, el:loveEl.e, x:{0:-3}}),
 
-  tl.play();
-  setInterval(()=>tl.replay(), 4300);
+      new mojs.Html({...opts, el:loveEl.y, x:{0:-20}})
+        .then({duration:boom, easing:easingBoom, x:{to:-20-33}})
+        .then({duration:move, easing, x:{to:-20-33-24}}),
+
+      new mojs.Html({...opts, el:loveEl.o2, x:{0:-27}})
+        .then({duration:boom, easing:easingBoom, x:{to:-27-27}})
+        .then({duration:move, easing, x:{to:-27-27-30}}),
+
+      new mojs.Html({...opts, el:loveEl.u, x:{0:-32}})
+        .then({duration:boom, easing:easingBoom, x:{to:-32-21}})
+        .then({duration:move, easing, x:{to:-32-21-36}})
+        .then({duration:boom, easing:easingBoom, x:{to:-32-21-36-31}})
+        .then({duration:move, easing, x:{to:-32-21-36-31-27}}),
+
+      new mojs.Shape({
+        parent: loveEl.container, shape:'heart', delay:move, fill:loveEl.colHeart,
+        x:-64, scale:{0:0.95, easing: mojs.easing.path('M0,100C2.9,86.7,33.6-7.3,46-7.3s15.2,22.7,26,22.7S89,0,100,0')},
+        duration:500
+      })
+        .then({ x:{to:-62, easing:'sin.inOut'}, scale:{to:0.65, easing:'sin.inOut'}, duration:boom+move-500 })
+        .then({ duration:boom-50, x:{to:-62+48}, scale:{to:0.90}, easing:'sin.in' })
+        .then({ duration:125, scale:{to:0.8}, easing:'sin.out' })
+        .then({ duration:125, scale:{to:0.85}, easing:'sin.out' })
+        .then({ duration:move-200, scale:{to:0.45}, easing:'sin.inOut' })
+        .then({ delay:-75, duration:150, x:{to:0}, scale:{to:0.90}, easing:'sin.in' })
+        .then({ duration:125, scale:{to:0.8}, easing:'sin.out' })
+        .then({ duration:125, scale:{to:0.85}, easing:'sin.out' })
+        .then({ duration:125 })
+        .then({ duration:350, scale:{to:0}, easing:'sin.out' }),
+
+      ...crtBoom(move, -64, 46),
+      ...crtBoom(move*2 + boom, 18, 34),
+      ...crtBoom(move*3 + boom*2 - 150, -64, 34),
+      ...crtBoom(move*3 + boom*2, 45, 34)
+    ]);
+  };
+
+  const loveTl = crtLoveTl().play();
+  setInterval(()=>loveTl.replay(), 4300);
+
+  const volume = 0.2;
+  loveEl.blup.volume = volume; loveEl.blop.volume = volume;
+
+  const toggleSound = (()=> {
+    let on = true;
+    return ()=>{
+      if(on){ loveEl.blup.volume=0; loveEl.blop.volume=0; loveEl.sound.classList.add('sound--off'); }
+      else  { loveEl.blup.volume=volume; loveEl.blop.volume=volume; loveEl.sound.classList.remove('sound--off'); }
+      on = !on;
+    };
+  })();
+  loveEl.sound.addEventListener('click', toggleSound);
 })();
 </script>
 </body>
