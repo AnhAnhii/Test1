@@ -1,146 +1,237 @@
 <!doctype html>
 <html lang="vi">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Mouse Hearts + Fireworks → Heart</title>
-  <style>
-    html,body{margin:0;height:100%;background:#000;overflow:hidden}
-    /* Canvas pháo hoa nền */
-    #fw{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
-    /* Tim emoji chạy theo chuột (overlay) */
-    .heart{
-      position:fixed;will-change:transform,opacity;pointer-events:none;font-size:16px;
-      filter:drop-shadow(0 0 4px rgba(255,120,160,.8));
-      z-index:2;
-    }
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Vortex → Golden Particles & Red Heart</title>
+<style>
+  html,body{margin:0;height:100%;background:#000;overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  /* (tuỳ chọn) ghi chú góc màn hình */
+  .note{position:fixed;right:12px;bottom:10px;color:#aaa;font:12px/1.3 system-ui,Arial;opacity:.6}
+</style>
 </head>
 <body>
-  <canvas id="fw"></canvas>
+<canvas id="cv"></canvas>
+<div class="note">Douyin-style: vortex gold → red heart</div>
 
-  <script>
-  /* ========= LAYER 1: Fireworks → Heart (canvas nền) ========= */
-  const cvs = document.getElementById('fw');
-  const g   = cvs.getContext('2d');
-  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+<script>
+/* =========================
+   Canvas & DPI
+========================= */
+const cv = document.getElementById('cv');
+const g  = cv.getContext('2d');
+const DPR = Math.min(window.devicePixelRatio||1, 2);
+function resize(){
+  cv.width  = innerWidth  * DPR;
+  cv.height = innerHeight * DPR;
+  g.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener('resize', resize); resize();
 
-  function resize(){
-    cvs.width  = innerWidth  * DPR;
-    cvs.height = innerHeight * DPR;
-    g.setTransform(DPR,0,0,DPR,0,0);
+/* =========================
+   Heart sampling (top region)
+========================= */
+function heartXY(t){
+  return [
+    16*Math.sin(t)**3,
+    13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t)
+  ];
+}
+// trả về danh sách điểm mục tiêu tạo hình trái tim ở phía trên
+function sampleHeartTop(maxPoints=900){
+  const pts = [];
+  const S   = Math.min(innerWidth, innerHeight) / 36; // nhỏ hơn để nằm gọn phần trên
+  const cx  = innerWidth/2;
+  const cy  = innerHeight * 0.32; // vị trí trái tim trên cao
+  for(let t=-Math.PI; t<=Math.PI; t+=0.01){
+    const [hx,hy] = heartXY(t);
+    pts.push({ x: cx + hx*S, y: cy - hy*S });
   }
-  addEventListener('resize', resize); resize();
+  // thưa bớt
+  const step = Math.max(1, Math.floor(pts.length / maxPoints));
+  return pts.filter((_,i)=> i%step===0);
+}
 
-  function heartParam(t){
-    // trả về [x,y] theo công thức trái tim
-    return [16*Math.sin(t)**3, 13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t)];
-  }
-  const cx = ()=> innerWidth/2;
-  const cy = ()=> innerHeight/2;
-  const S  = ()=> Math.min(innerWidth, innerHeight) / 34;
+/* =========================
+   Vortex field (lốc xoáy)
+   - tâm xoáy ở (cx, cyVortex)
+   - cường độ theo gaussian theo khoảng cách
+   - hướng: thành phần xoáy (tangential) + hút tâm (radial) + nâng lên (updraft)
+========================= */
+const vortex = {
+  cx: ()=> innerWidth/2,
+  cy: ()=> innerHeight*0.65,        // tâm xoáy ở dưới
+  sigma: ()=> Math.min(innerWidth,innerHeight)*0.18, // bán kính ảnh hưởng
+  omega: 2.1,       // độ xoáy (tangential)
+  attract: 0.9,     // hút về trục xoáy (radial)
+  updraft: 180,     // lực nâng lên
+  jitter: 0.6       // nhiễu nhẹ
+};
+function vortexField(x,y){
+  const cx = vortex.cx(), cy = vortex.cy();
+  const dx = x - cx, dy = y - cy;
+  const r  = Math.hypot(dx, dy);
+  const sig = vortex.sigma();
+  const fall = Math.exp(- (r*r) / (2*sig*sig)); // gaussian falloff 0..1
 
-  class Particle {
-    constructor(x,y,dx,dy,h){
-      this.x=x; this.y=y; this.dx=dx; this.dy=dy;
-      this.h=h; this.age=0; this.phase='out';
+  // vector đơn vị: radial & tangential (xoay quanh tâm cy)
+  const radx = (r===0)?0: dx/r, rady = (r===0)?0: dy/r;
+  const tx = -rady, ty = radx; // vuông góc để tạo xoáy
+
+  // thành phần vận tốc do xoáy (tangential)
+  const vx_swirl = tx * vortex.omega * fall;
+  const vy_swirl = ty * vortex.omega * fall;
+
+  // hút nhẹ về tâm (radial âm)
+  const vx_pull = -radx * vortex.attract * fall;
+  const vy_pull = -rady * vortex.attract * fall;
+
+  // nâng lên (updraft) mạnh nhất gần tâm
+  const vy_lift = - (vortex.updraft * fall);
+
+  return {
+    vx: vx_swirl + vx_pull,
+    vy: vy_swirl + vy_pull + vy_lift
+  };
+}
+
+/* =========================
+   Golden bottom particles (emitter)
+========================= */
+const GOLD = {
+  count: 380,             // số hạt vàng tuần hoàn
+  sizeMin: 1.2,
+  sizeMax: 3.8,
+  baseVy: -25,            // bay lên cơ bản
+  lifeMax: 5.5,           // giây
+  drag: 0.985
+};
+const golds = Array.from({length: GOLD.count}, ()=> resetGold(null));
+function rand(a,b){ return a + Math.random()*(b-a); }
+
+function resetGold(p, x0, y0){
+  const w = innerWidth, h = innerHeight;
+  const x = (x0!==undefined? x0 : rand(0, w));
+  const y = (y0!==undefined? y0 : rand(h*0.86, h*0.97)); // dải gần đáy
+  return {
+    x, y,
+    vx: rand(-10, 10),
+    vy: GOLD.baseVy + rand(-10, 5),
+    r: rand(GOLD.sizeMin, GOLD.sizeMax),
+    hue: 48 + Math.random()*12,     // vàng ấm
+    life: rand(2.2, GOLD.lifeMax)   // tuổi thọ
+  };
+}
+
+/* =========================
+   Red heart particles (top shape)
+========================= */
+const heartTargets = sampleHeartTop(900);
+const RED = {
+  kSpring: 7.0,        // độ đàn hồi về vị trí gốc
+  damp:   0.86,        // giảm chấn
+  size:   1.6,         // kích thước chấm đỏ
+  influence: 0.33      // mức độ lốc xoáy làm nhiễu trái tim
+};
+const reds = heartTargets.map(t => ({
+  x: t.x + rand(-20,20), y: t.y + rand(-20,20),
+  tx: t.x, ty: t.y, vx: 0, vy: 0
+}));
+
+/* =========================
+   Update & Render
+========================= */
+let last = performance.now();
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.033, (now - last)/1000); // clamp 30 FPS logic
+  last = now;
+
+  // nền mờ để có “vệt” nhẹ
+  g.fillStyle = "rgba(0,0,0,0.20)";
+  g.fillRect(0,0,innerWidth,innerHeight);
+
+  // --- GOLD: update ---
+  for(let i=0;i<golds.length;i++){
+    const p = golds[i];
+    // field từ vortex
+    const f = vortexField(p.x, p.y);
+    p.vx += f.vx + (Math.random()-0.5)*vortex.jitter;
+    p.vy += f.vy + (Math.random()-0.5)*vortex.jitter;
+
+    // damping
+    p.vx *= GOLD.drag;
+    p.vy *= GOLD.drag;
+
+    // integrate
+    p.x += p.vx*dt;
+    p.y += p.vy*dt;
+
+    // life & recycle: nếu lên quá cao / đi ra rìa / hết tuổi thọ
+    p.life -= dt;
+    if (p.y < innerHeight*0.22 || p.x < -30 || p.x > innerWidth+30 || p.life <= 0){
+      golds[i] = resetGold(p);
     }
   }
 
-  function targetOnHeart(){
-    const t = Math.random()*Math.PI*2;
-    const [hx,hy] = heartParam(t);
-    const s = S();
-    return { x: cx()+hx*s, y: cy()-hy*s };
+  // --- RED HEART: update ---
+  for(let i=0;i<reds.length;i++){
+    const p = reds[i];
+
+    // lực lốc xoáy làm nhiễu: dùng field nhưng giảm mạnh
+    const f = vortexField(p.x, p.y);
+    const swirlX = f.vx * RED.influence;
+    const swirlY = f.vy * RED.influence * 0.35; // bớt kéo đứt hình
+
+    // lực đàn hồi về vị trí gốc trái tim
+    const dx = p.tx - p.x;
+    const dy = p.ty - p.y;
+    p.vx += dx * RED.kSpring * dt + swirlX*dt;
+    p.vy += dy * RED.kSpring * dt + swirlY*dt;
+
+    // giảm chấn + nhiễu rất nhẹ để “sống”
+    p.vx *= RED.damp;
+    p.vy *= RED.damp;
+    p.vx += (Math.random()-0.5)*0.05;
+    p.vy += (Math.random()-0.5)*0.05;
+
+    p.x += p.vx*dt*60;
+    p.y += p.vy*dt*60;
   }
 
-  // burst: nếu truyền toạ độ sẽ nổ tại điểm đó, nếu không sẽ random gần giữa
-  function burst(px=null, py=null){
-    const x = px ?? (cx()+(Math.random()-.5)*100);
-    const y = py ?? (cy()+(Math.random()-.5)*80);
-    const hue = Math.floor(Math.random()*360);
-    for(let i=0;i<200;i++){
-      const a = Math.random()*Math.PI*2;
-      const v = 80 + Math.random()*140;
-      particles.push(new Particle(x,y,Math.cos(a)*v,Math.sin(a)*v,hue));
-    }
+  // --- DRAW: gold (glow), then red heart ---
+  // gold glow
+  for(const p of golds){
+    const grd = g.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*5);
+    grd.addColorStop(0, `hsla(${p.hue} 100% 60% / .95)`);
+    grd.addColorStop(1, 'transparent');
+    g.fillStyle = grd;
+    g.beginPath(); g.arc(p.x,p.y,p.r*5,0,6.283); g.fill();
+
+    // thân hạt
+    g.fillStyle = `hsl(${p.hue} 100% 55%)`;
+    g.beginPath(); g.arc(p.x,p.y,p.r,0,6.283); g.fill();
   }
 
-  let particles = [];
-  burst(); // nổ khởi động
-  let last = performance.now();
-
-  function fireworksLoop(now){
-    requestAnimationFrame(fireworksLoop);
-    const dt = Math.min(0.032, (now-last)/1000);
-    last = now;
-
-    // nền mờ dần để tạo vệt
-    g.fillStyle = "rgba(0,0,0,.25)";
-    g.fillRect(0,0,innerWidth,innerHeight);
-
-    // nếu gần hết hạt thì nổ thêm
-    if(particles.length < 50) burst();
-
-    particles.forEach(p=>{
-      if(p.phase === 'out'){
-        p.dx *= 0.985; p.dy *= 0.985;
-        p.x += p.dx*dt; p.y += p.dy*dt;
-        p.age += dt;
-        if(p.age > 0.6){
-          p.phase='in';
-          const t = targetOnHeart();
-          p.tx=t.x; p.ty=t.y;
-        }
-      }else{
-        // hút về điểm trên hình trái tim
-        p.x += (p.tx - p.x) * dt * 1.8;
-        p.y += (p.ty - p.y) * dt * 1.8;
-      }
-
-      const rad = 6;
-      const grd = g.createRadialGradient(p.x,p.y,0,p.x,p.y,rad);
-      grd.addColorStop(0,`hsla(${p.h} 100% 60% / .9)`);
-      grd.addColorStop(1,'transparent');
-      g.fillStyle = grd;
-      g.beginPath(); g.arc(p.x,p.y,rad,0,Math.PI*2); g.fill();
-    });
-
-    // loại bỏ hạt đã tới đích
-    particles = particles.filter(p => !(p.phase==='in' && Math.hypot(p.x-p.tx,p.y-p.ty) < 1));
+  // red heart dots (nhỏ, giữ hình)
+  g.fillStyle = "#ff2a55";
+  for(const p of reds){
+    g.fillRect(p.x-RED.size/2, p.y-RED.size/2, RED.size, RED.size);
   }
-  requestAnimationFrame(fireworksLoop);
+}
+requestAnimationFrame(loop);
 
-  // click để nổ pháo hoa tại vị trí click
-  addEventListener('click', e => {
-    const x = e.clientX, y = e.clientY;
-    burst(x, y);
-  });
-
-  /* ========= LAYER 2: Mouse Trail Hearts (emoji overlay) ========= */
-  const EMOJIS = ['💗','💓'];
-  function spawnHeart(x,y){
-    const el = document.createElement('div');
-    el.className = 'heart';
-    el.textContent = EMOJIS[Math.random()*EMOJIS.length|0];
-    const s = 14 + Math.random()*20;
-    el.style.fontSize = s + 'px';
-    document.body.appendChild(el);
-
-    const dx=(Math.random()-.5)*80, dy=-60-Math.random()*60, rot=(Math.random()-.5)*60;
-    const dur=800+Math.random()*600, start=performance.now();
-
-    (function anim(t){
-      const p = Math.min(1, (t-start)/dur);
-      const ease = 1 - (1-p)*(1-p); // ease-out
-      el.style.transform = `translate(${x+dx*ease}px,${y+dy*ease}px) rotate(${rot*ease}deg)`;
-      el.style.opacity   = String(1-p);
-      if(p<1) requestAnimationFrame(anim); else el.remove();
-    })(start);
-  }
-
-  addEventListener('pointermove', e => spawnHeart(e.clientX, e.clientY));
-  addEventListener('click',       e => spawnHeart(e.clientX, e.clientY));
-  </script>
+/* =========================
+   Optional: click để “tăng lực xoáy”
+========================= */
+addEventListener('click', ()=>{
+  // xung xoáy ngắn: tăng omega/updraft rồi trả về
+  const oldOmega = vortex.omega, oldUp = vortex.updraft;
+  vortex.omega = oldOmega * 1.35;
+  vortex.updraft = oldUp * 1.25;
+  setTimeout(()=>{ vortex.omega = oldOmega; vortex.updraft = oldUp; }, 400);
+});
+</script>
 </body>
 </html>
