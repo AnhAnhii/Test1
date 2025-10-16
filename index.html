@@ -7,18 +7,17 @@
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#000}
 
-  /* ===== Canvas nền sao (luôn nằm dưới cùng) ===== */
+  /* ===== Canvas nền sao (luôn dưới cùng) ===== */
   #canvas{
     position:fixed; inset:0; z-index:1;
     display:block; background:transparent !important;
   }
-
-  /* Làm mọi canvas trong suốt đề phòng CSS khác ghi đè */
+  /* Đảm bảo mọi canvas trong suốt */
   canvas{ background:transparent !important; }
 
-  /* ===== Panel gốc của bạn ===== */
+  /* ===== Panel điều khiển ===== */
   #ui{
-    position:fixed;left:12px;top:12px;z-index:25; /* trên Three.js */
+    position:fixed;left:12px;top:12px;z-index:25;
     background:rgba(20,20,20,.55);border:1px solid #2a2a2a;border-radius:10px;
     padding:10px;color:#ddd;font:12px/1.2 system-ui,Arial;min-width:260px
   }
@@ -26,18 +25,15 @@
   #ui input[type=range]{flex:1}
   #ui label{cursor:pointer}
 
-  /* ===== Overlay LOVE (đặt trên cùng) ===== */
+  /* ===== Overlay LOVE (trên cùng) ===== */
   #love-wrap{
-    position:fixed;inset:0 auto auto 0; /* top-left */
-    width:100%;pointer-events:none;
-    z-index:30;display:flex;justify-content:center;align-items:flex-start;
-    padding-top:10px;
+    position:fixed;inset:0 auto auto 0; width:100%; pointer-events:none;
+    z-index:30; display:flex; justify-content:center; align-items:flex-start; padding-top:10px;
   }
-  .love-container{ width:min(500px,92vw);height:auto;aspect-ratio:500/200;position:relative; }
-  .love-svg{position:absolute;inset:0;z-index:2}
-  .love-mo{width:100%;height:100%}
+  .love-container{ width:min(500px,92vw); aspect-ratio:500/200; position:relative; }
+  .love-svg{position:absolute; inset:0; z-index:2}
+  .love-mo{width:100%; height:100%}
 
-  /* Style chữ LOVE */
   .love-line{fill:none;stroke:#ffffff;stroke-width:8;stroke-linecap:round;stroke-miterlimit:10}
   .love-letter{fill:#f2a9ff}
   .love-sound{
@@ -52,13 +48,17 @@
 <!-- ===== NỀN SAO ===== -->
 <canvas id="canvas"></canvas>
 
-<!-- ===== Panel điều khiển gốc ===== -->
+<!-- ===== Panel điều khiển ===== -->
 <div id="ui">
   <div><b>Chức năng</b></div>
   <div class="row"><span style="width:86px">Độ đẩy</span> <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.0"></div>
   <div class="row"><span style="width:86px">Kích thước hạt</span> <input id="hsize" type="range" min="1.6" max="4.0" step="0.1" value="2.6"></div>
   <div class="row"><span style="width:86px">Thời gian giữ (s)</span> <input id="hold" type="range" min="1" max="8" step="0.5" value="3.5"></div>
   <div class="row"><span style="width:86px">% Viền</span> <input id="edge" type="range" min="0" max="80" step="5" value="40"></div>
+  <!-- Thanh trượt mới: tốc độ sao -->
+  <div class="row"><span style="width:86px">Tốc độ sao</span>
+    <input id="starSpeed" type="range" min="0.1" max="1.5" step="0.05" value="0.4">
+  </div>
   <div class="row">Shape:
     <label><input type="radio" name="shape" value="heart" checked> ❤</label>
     <label><input type="radio" name="shape" value="circle"> ●</label>
@@ -66,7 +66,7 @@
   </div>
 </div>
 
-<!-- ===== Overlay LOVE (đặt trên cùng màn hình) ===== -->
+<!-- ===== Overlay LOVE ===== -->
 <div id="love-wrap">
   <div class="love-container">
     <svg class="love-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 200" aria-hidden="true">
@@ -88,15 +88,13 @@
 </div>
 <div class="love-sound">sound</div>
 
-<!-- ===== Three.js (gốc của bạn) ===== -->
+<!-- ===== Thư viện ===== -->
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-
-<!-- ===== mo.js cho hiệu ứng chữ ===== -->
 <script src="https://cdn.jsdelivr.net/mojs/latest/mo.min.js"></script>
 
 <script>
 /* =========================
-   NỀN SAO (background)
+   NỀN SAO (background) + thanh trượt tốc độ
    ========================= */
 (function drawStars(){
   var canvas = document.getElementById("canvas"),
@@ -108,6 +106,12 @@
       count = 0,
       maxStars = 1300;
 
+  // --- Điều khiển tốc độ từ thanh trượt ---
+  var speedControl = document.getElementById('starSpeed');
+  let STAR_SPEED = parseFloat(speedControl?.value || 0.4);
+  if (speedControl) speedControl.oninput = e => { STAR_SPEED = parseFloat(e.target.value); };
+
+  // --- Canvas phụ tạo sprite sao ---
   var canvas2 = document.createElement("canvas"),
       ctx2 = canvas2.getContext("2d");
   canvas2.width = 100; canvas2.height = 100;
@@ -128,15 +132,17 @@
     var max = Math.max(x,y), diameter = Math.round(Math.sqrt(max*max+max*max));
     return diameter/2;
   }
+
   var Star = function(){
     this.orbitRadius = random(maxOrbit(w,h));
     this.radius = random(60, this.orbitRadius) / 8;
     this.orbitX = w/2; this.orbitY = h/2;
     this.timePassed = random(0, maxStars);
-    this.speed = random(this.orbitRadius) / 50000;
+    this.speed = random(this.orbitRadius) / 50000; // base speed
     this.alpha = random(2,10)/10;
     count++; stars[count] = this;
   };
+
   Star.prototype.draw = function(){
     var x = Math.sin(this.timePassed) * this.orbitRadius + this.orbitX,
         y = Math.cos(this.timePassed) * this.orbitRadius + this.orbitY,
@@ -147,7 +153,9 @@
 
     ctx.globalAlpha = this.alpha;
     ctx.drawImage(canvas2, x - this.radius/2, y - this.radius/2, this.radius, this.radius);
-    this.timePassed += this.speed;
+
+    // Áp dụng hệ số tốc độ từ thanh trượt
+    this.timePassed += this.speed * STAR_SPEED;
   };
 
   for (var i=0; i<maxStars; i++){ new Star(); }
@@ -164,7 +172,7 @@
   }
   animation();
 
-  // full-screen khi đổi kích thước
+  // Resize full-screen
   window.addEventListener('resize', function(){
     w = canvas.width = window.innerWidth;
     h = canvas.height = window.innerHeight;
@@ -172,7 +180,7 @@
 })();
 
 /* =========================
-   PHẦN 1: Three.js vortex gốc
+   VORTEX Three.js (trong suốt)
    ========================= */
 let SPRITE_SHAPE = 'heart';
 const TOTAL = 2627;
@@ -180,19 +188,17 @@ let HEART_POINT_COUNT = 5000;
 let HEART_SCALE = 2.6;
 const HEART_YOFFSET = 38;
 
-/* === SỬA 1: WebGL trong suốt (alpha:true) === */
+// WebGL trong suốt để không che nền sao
 const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2));
 document.body.appendChild(renderer.domElement);
-/* === SỬA 2: ClearColor alpha 0 + style trong suốt + layer === */
 renderer.setClearColor(0x000000, 0);
 Object.assign(renderer.domElement.style, {
   position:'fixed', inset:'0', zIndex:5, pointerEvents:'none', background:'transparent'
 });
 
 const scene = new THREE.Scene();
-/* Nếu trước đây bạn có set scene.background = ... thì bỏ đi: */
 scene.background = null;
 
 const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 2000);
@@ -374,7 +380,7 @@ document.querySelectorAll('input[name="shape"]').forEach(r=>{
 });
 sizeEl.oninput=()=>{
   HEART_SCALE=parseFloat(sizeEl.value);
-  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
+  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_YOFFSET, HEART_YOFFSET, parseFloat(edgeEl.value));
 };
 edgeEl.oninput=()=>{
   heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
@@ -386,7 +392,7 @@ addEventListener('resize', ()=>{
 });
 
 /* =========================
-   PHẦN 2: Hiệu ứng mo.js "I LOVE YOU" (overlay)
+   Hiệu ứng mo.js "I LOVE YOU"
    ========================= */
 (function(){
   const qs = (sel,root=document) => root.querySelector(sel);
