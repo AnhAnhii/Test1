@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>3D Heart Vortex + Abe ♥ Ebe overlay</title>
+<title>3D Heart Vortex + Abe Ebe overlay</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#000}
 
-  /* ===== Panel điều khiển (đã Việt hoá) ===== */
+  /* ===== Panel điều khiển (Việt hoá) ===== */
   #ui{
     position:fixed;left:12px;top:12px;z-index:9;
     background:rgba(20,20,20,.55);border:1px solid #2a2a2a;border-radius:10px;
@@ -17,79 +17,80 @@
   #ui input[type=range]{flex:1}
   #ui label{cursor:pointer}
 
-  /* ===== Overlay LOVE (đặt trên cùng) ===== */
+  /* ===== Overlay chữ (đặt trên cùng, không chặn UI) ===== */
   #love-wrap{
     position:fixed;inset:0 auto auto 0;
-    width:100%;pointer-events:none; /* không chặn UI gốc */
+    width:100%;pointer-events:none;
     z-index:20;display:flex;justify-content:center;align-items:flex-start;
     padding-top:10px;
   }
-  .love-container{
-    width:min(500px,92vw);height:auto;aspect-ratio:500/200;position:relative;
-  }
+  .love-container{width:min(500px,92vw);aspect-ratio:500/200;position:relative}
   .love-svg{position:absolute;inset:0;z-index:2}
   .love-mo{width:100%;height:100%}
 
-  .love-line{fill:none;stroke:#ffffff;stroke-width:8;stroke-linecap:round;stroke-miterlimit:10}
-
-  .love-text{
-    position:absolute;inset:0;display:flex;justify-content:center;align-items:center;
-    gap:.35em;font-family: "Helvetica Neue", Arial, sans-serif;
-    font-weight:700; font-size:min(44px,8.2vw); letter-spacing:.02em;
-  }
-  .love-text .lt{color:#f2a9ff; display:inline-block; transform:translateX(0)}
-  .love-text .heart{color:#fa4843}
+  /* phong cách giống bản gốc */
+  .line{fill:none;stroke:#ffffff;stroke-width:8;stroke-linecap:round;stroke-miterlimit:10}
+  .lttr{fill:#f2a9ff}
+  /* SVG <text> style cho chữ */
+  .lttr{font-family:"Helvetica Neue",Arial,Helvetica,sans-serif;font-weight:700;letter-spacing:.02em}
 </style>
 </head>
 <body>
 <!-- ===== Panel điều khiển ===== -->
 <div id="ui">
   <div><b>3D Trái tim Vortex</b></div>
-  <div class="row"><span style="width:110px">Cường độ gió</span> <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.0"></div>
-  <div class="row"><span style="width:110px">Kích thước tim</span> <input id="hsize" type="range" min="1.6" max="4.0" step="0.1" value="2.6"></div>
+  <div class="row"><span style="width:110px">Cường độ</span> <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.0"></div>
+  <div class="row"><span style="width:110px">Kích thước</span> <input id="hsize" type="range" min="1.6" max="4.0" step="0.1" value="2.6"></div>
   <div class="row"><span style="width:110px">Giữ hình (giây)</span> <input id="hold" type="range" min="1" max="8" step="0.5" value="3.5"></div>
   <div class="row"><span style="width:110px">% viền trái tim</span> <input id="edge" type="range" min="0" max="80" step="5" value="40"></div>
   <div class="row"><span style="width:110px">Hình hạt</span>
     <label><input type="radio" name="shape" value="heart" checked> Trái tim</label>
     <label><input type="radio" name="shape" value="circle"> Hình tròn</label>
   </div>
-  <div class="row"><span style="width:110px">Particles</span>
+  <div class="row"><span style="width:110px">Số lượng</span>
     <input id="particles" type="range" min="1200" max="8000" step="200" value="3600">
     <span style="margin-left:6px" id="pcnt"></span>
   </div>
 </div>
 
-<!-- ===== Overlay chữ “Abe ♥ Ebe” ===== -->
+<!-- ===== Overlay SVG theo “kiểu bản gốc” ===== -->
 <div id="love-wrap">
   <div class="love-container">
-    <!-- 2 line dọc như bản gốc -->
     <svg class="love-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 200" aria-hidden="true">
-      <line class="love-line love-line--left" x1="10" y1="17" x2="10" y2="183"></line>
-      <line class="love-line love-line--rght" x1="490" y1="17" x2="490" y2="183"></line>
+      <!-- 2 line dọc -->
+      <line class="line line--left" x1="10" y1="17"  x2="10"  y2="183"></line>
+      <line class="line line--rght" x1="490" y1="17" x2="490" y2="183"></line>
+
+      <!-- NHÓM CHỮ: giữ cấu trúc <g> như bản gốc, nhưng dùng <text> để dễ sửa nội dung -->
+      <g id="abe-ebe">
+        <!-- “Abe Ebe” — chia thành 6 phần tử như ILOVEYOU để bám theo timeline -->
+        <!-- Hàng chuẩn y=110; mỗi chữ tự có x riêng để cân giữa giống demo -->
+        <text class="lttr lttr--A"   x="95"  y="110" font-size="64">A</text>
+        <text class="lttr lttr--b1"  x="135" y="110" font-size="64">b</text>
+        <text class="lttr lttr--e1"  x="165" y="110" font-size="64">e</text>
+
+        <text class="lttr lttr--E"   x="230" y="110" font-size="64">E</text>
+        <text class="lttr lttr--b2"  x="270" y="110" font-size="64">b</text>
+        <text class="lttr lttr--e2"  x="300" y="110" font-size="64">e</text>
+      </g>
     </svg>
-    <!-- Chữ dạng span để linh hoạt đổi nội dung -->
-    <div class="love-text" aria-label="Abe ♥ Ebe">
-      <span class="lt l1">A</span><span class="lt l2">b</span><span class="lt l3">e</span>
-      <span class="lt heart l4">♥</span>
-      <span class="lt l5">E</span><span class="lt l6">b</span><span class="lt l7">e</span>
-    </div>
-    <!-- container cho mo.js (tim nổ) -->
-    <div class="love-mo"></div>
+    <!-- container cho mo.js (tim nổ/boom) -->
+    <div class="mo-container"></div>
   </div>
 </div>
 
 <!-- ===== Three.js ===== -->
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-<!-- ===== mo.js (hiệu ứng chữ) ===== -->
+<!-- ===== mo.js ===== -->
 <script src="https://cdn.jsdelivr.net/mojs/latest/mo.min.js"></script>
 
 <script>
 /* =========================
-   PHẦN 1: Three.js vortex
+   PHẦN 1: Three.js vortex (giữ nguyên logic của bạn)
    ========================= */
 let SPRITE_SHAPE = 'heart';
 let TOTAL = 3600;
-let HEART_POINT_COUNT = 2600;
+let HEART_POINT_COUNT = 5000;
 let HEART_SCALE = 2.6;
 const HEART_YOFFSET = 38;
 
@@ -144,7 +145,6 @@ function buildHeartTargets(count, scale=HEART_SCALE, yOffset=HEART_YOFFSET, edge
 }
 let heartTargets = buildHeartTargets(HEART_POINT_COUNT);
 
-/* ---- Data buffers (khởi tạo) ---- */
 const blue = new THREE.Color('#66ccff');
 const gold = new THREE.Color('#ffd34d');
 const red  = new THREE.Color('#ff3a6a');
@@ -185,7 +185,7 @@ function initBuffers(total){
 }
 initBuffers(TOTAL);
 
-/* ---- Vortex field ---- */
+/* Vortex field */
 function vortexField(x,y,z,strength=1){
   const dx=x, dy=y-vortexY, dz=z;
   const r=Math.max(5, Math.hypot(dx,dz));
@@ -201,7 +201,6 @@ function vortexField(x,y,z,strength=1){
   };
 }
 
-/* ---- Animate ---- */
 let tPrev=performance.now(), phase=0;
 const strengthEl=document.getElementById('strength');
 const sizeEl=document.getElementById('hsize');
@@ -281,7 +280,7 @@ function animate(now){
   renderer.render(scene, camera);
 }
 
-/* ---- UI events ---- */
+/* UI events */
 document.querySelectorAll('input[name="shape"]').forEach(r=>{
   r.onchange=()=>{
     SPRITE_SHAPE=r.value;
@@ -291,6 +290,7 @@ document.querySelectorAll('input[name="shape"]').forEach(r=>{
 });
 sizeEl.oninput=()=>{
   HEART_SCALE=parseFloat(sizeEl.value);
+  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_YOFFSET, HEART_YOFFSET, parseFloat(edgeEl.value));
   heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
 };
 edgeEl.oninput=()=>{
@@ -312,92 +312,96 @@ addEventListener('resize', ()=>{
 });
 
 /* =========================
-   PHẦN 2: mo.js overlay “Abe ♥ Ebe”
+   PHẦN 2: mo.js overlay cho “Abe Ebe”
+   - Giữ cấu trúc SVG <g> + class .lttr như bản gốc
+   - Chỉ khác là dùng <text> thay vì <path> để dễ đổi chữ
    ========================= */
 (function(){
-  const qs = (sel,root=document) => root.querySelector(sel);
-  const loveRoot = qs('#love-wrap');
-  const loveEl = {
-    container: qs('.love-mo', loveRoot),
-    lineLeft: qs('.love-line--left', loveRoot),
-    lineRight: qs('.love-line--rght', loveRoot),
-    letters: [
-      qs('.l1', loveRoot), qs('.l2', loveRoot), qs('.l3', loveRoot),
-      qs('.l4', loveRoot), qs('.l5', loveRoot), qs('.l6', loveRoot), qs('.l7', loveRoot)
-    ],
-    colTxt: "#f2a9ff",
-    colHeart: "#fa4843"
+  const qs = (s,root=document)=>root.querySelector(s);
+  const el = {
+    container: qs('.mo-container'),
+    // chữ
+    A:  qs('.lttr--A'),
+    b1: qs('.lttr--b1'),
+    e1: qs('.lttr--e1'),
+    E:  qs('.lttr--E'),
+    b2: qs('.lttr--b2'),
+    e2: qs('.lttr--e2'),
+    // line
+    lineLeft:  qs('.line--left'),
+    lineRight: qs('.line--rght'),
+    // màu
+    colTxt:   '#f2a9ff',
+    colHeart: '#fa4843'
   };
 
   class Heart extends mojs.CustomShape {
-    getShape(){return '<path d="M50,88.9C25.5,78.2,0.5,54.4,3.8,31.1S41.3,1.8,50,29.9c8.7-28.2,42.8-22.2,46.2,1.2S74.5,78.2,50,88.9z"/>';}
+    getShape(){return '<path d="M50,88.9C25.5,78.2,0.5,54.4,3.8,31.1S41.3,1.8,50,29.9c8.7-28.2,42.8-22.2,46.2,1.2S74.5,78.2,50,88.9z"/>'; }
     getLength(){return 200;}
   }
   mojs.addShape('heart', Heart);
 
   const crtBoom = (delay=0, x=0, rd=46) => {
-    const parent = loveEl.container;
+    const parent = el.container;
     const crcl = new mojs.Shape({
-      shape:'circle',fill:'none',stroke:loveEl.colTxt,strokeWidth:{5:0},
-      radius:{[rd]:[rd+20]},easing:'quint.out',duration:500/3,parent,delay,x
+      shape:'circle', fill:'none', stroke:el.colTxt, strokeWidth:{5:0},
+      radius:{[rd]:[rd+20]}, easing:'quint.out', duration:500/3, parent, delay, x
     });
     const brst = new mojs.Burst({
       radius:{[rd+15]:110}, angle:'rand(60,180)', count:3, timeline:{delay}, parent, x,
-      children:{ radius:[5,3,7], fill:loveEl.colTxt, scale:{1:0, easing:'quad.in'},
+      children:{ radius:[5,3,7], fill:el.colTxt, scale:{1:0, easing:'quad.in'},
         pathScale:[.8,null], degreeShift:['rand(13,60)',null], duration:1000/3, easing:'quint.out'}
     });
     return [crcl, brst];
   };
 
-  // setup trạng thái ban đầu cho chữ
-  loveEl.letters.forEach((n,i)=>{
-    n.style.opacity = '1';
-    n.style.transform = `translateX(0px)`;
-  });
-
   const move=1000, boom=200, easing='sin.inOut', easingBoom='sin.in', easingOut='sin.out';
   const opts={ duration:move, easing, opacity:1 };
+  const resetLetters = () => [el.A,el.b1,el.e1,el.E,el.b2,el.e2].forEach(n=>{
+    n.style.opacity=1; n.style.transform='translate(0px,0px)';
+  });
 
+  // timeline: kẹp line + chạy chữ + nổ tim + replay
   const tl = new mojs.Timeline().add([
-    // Reset & ẩn dần các cụm chữ ở giữa timeline để tạo vòng lặp
+    // reset chu kỳ
     new mojs.Tween({
-      duration: 50, delay: 4050,
-      onUpdate: p => loveEl.letters.forEach(n=> n.style.opacity = p),
-      onComplete: () => loveEl.letters.forEach(n=>{ n.style.opacity=1; n.style.transform='translateX(0px)'; })
+      duration:50, delay:4050,
+      onUpdate:p=>[el.A,el.b1,el.e1,el.E,el.b2,el.e2].forEach(n=>n.style.opacity=p),
+      onComplete: resetLetters
     }),
 
-    // Line trái/phải trượt như “kẹp”
-    new mojs.Html({...opts, el:loveEl.lineLeft,  x:{0:52}})
+    // line trái/phải
+    new mojs.Html({...opts, el:el.lineLeft,  x:{0:52}})
       .then({duration:boom+move, easing, x:{to:52+54}})
       .then({duration:boom+move, easing, x:{to:52+54+60}})
       .then({duration:150, easing, x:{to:52+54+60+10}})
       .then({duration:300})
       .then({duration:350, x:{to:0}, easing:easingOut}),
-    new mojs.Html({...opts, el:loveEl.lineRight, x:{0:-52}})
+
+    new mojs.Html({...opts, el:el.lineRight, x:{0:-52}})
       .then({duration:boom+move, easing, x:{to:-52-54}})
       .then({duration:boom+move, easing, x:{to:-52-54-60}})
       .then({duration:150, easing, x:{to:-52-54-60-10}})
       .then({duration:300})
       .then({duration:350, x:{to:0}, easing:easingOut}),
 
-    // Chữ “A b e ♥ E b e” trượt nhịp nhàng, hơi ziczac cho vui mắt
-    new mojs.Html({...opts, el:loveEl.letters[0], x:{0:  34}}) // A
-      .then({duration:boom, easing:easingBoom, x:{to:  34+22}})
-      .then({duration:move, easing,       x:{to:  34+22+28}}),
-    new mojs.Html({...opts, el:loveEl.letters[1], x:{0:  12}}), // b
-    new mojs.Html({...opts, el:loveEl.letters[2], x:{0:   6}}), // e
+    // A b e
+    new mojs.Html({...opts, el:el.A,  x:{0:  34}})
+      .then({duration:boom, easing:easingBoom, x:{to:  34+19}})
+      .then({duration:move, easing,       x:{to:  34+19+38}}),
+    new mojs.Html({...opts, el:el.b1, x:{0:  12}}),
+    new mojs.Html({...opts, el:el.e1, x:{0:   6}}),
 
-    new mojs.Html({...opts, el:loveEl.letters[3], x:{0:  -8}})  // ♥
-      .then({duration:boom, easing:easingBoom, x:{to: -8-22}})
-      .then({duration:move, easing,       x:{to: -8-22-18}}),
+    // E b e
+    new mojs.Html({...opts, el:el.E,  x:{0: -16}})
+      .then({duration:boom, easing:easingBoom, x:{to: -16-22}})
+      .then({duration:move, easing,       x:{to: -16-22-18}}),
+    new mojs.Html({...opts, el:el.b2, x:{0: -24}}),
+    new mojs.Html({...opts, el:el.e2, x:{0: -30}}),
 
-    new mojs.Html({...opts, el:loveEl.letters[4], x:{0: -16}}), // E
-    new mojs.Html({...opts, el:loveEl.letters[5], x:{0: -24}}), // b
-    new mojs.Html({...opts, el:loveEl.letters[6], x:{0: -30}}), // e
-
-    // Tim nổ + vòng tròn (giữ lại vibe bản gốc)
+    // Tim nổ (vẫn giữ cảm giác bản gốc)
     new mojs.Shape({
-      parent: loveEl.container, shape:'heart', delay:move, fill:'#fa4843',
+      parent: el.container, shape:'heart', delay:move, fill:el.colHeart,
       x:-40, scale:{0:0.95, easing: mojs.easing.path('M0,100C2.9,86.7,33.6-7.3,46-7.3s15.2,22.7,26,22.7S89,0,100,0')},
       duration:500
     })
