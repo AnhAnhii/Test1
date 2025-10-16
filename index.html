@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>3D Douyin Heart Vortex (Three.js) – FIX</title>
+<title>3D Douyin Heart Vortex • glow + heart sprites</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#000}
   #ui{
@@ -12,204 +12,276 @@
     padding:8px 10px;color:#ddd;font:12px/1.2 system-ui,Arial
   }
   #ui input[type=range]{width:120px}
-  #err{position:fixed;inset:auto 12px 12px 12px;color:#f88;font:12px/1.3 monospace}
 </style>
 </head>
 <body>
 <div id="ui">
-  <div><b>3D Heart Vortex</b> · Douyin style</div>
-  <div>Strength <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.0"></div>
+  <div><b>3D Heart Vortex</b> · glow</div>
+  <div>Strength <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.1"></div>
   <div>Particles: <span id="pcnt"></span></div>
 </div>
-<pre id="err"></pre>
 
-<!-- Three.js -->
+<!-- Three.js core + postprocessing (non-module builds) -->
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.160.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://unpkg.com/three@0.160.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://unpkg.com/three@0.160.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
 <script>
-(function(){
-  const errBox = document.getElementById('err');
-  if (!('WebGLRenderingContext' in window)) {
-    errBox.textContent = 'Trình duyệt không hỗ trợ WebGL.';
-    return;
+/* =========================
+   Tunables
+========================= */
+const SPRITE_SHAPE = 'heart'; // 'heart' | 'circle'
+const TOTAL = 3200;           // tổng số hạt (nếu máy yếu: 2200)
+const HEART_POINT_COUNT = 2000; // số hạt bám hình trái tim
+const PARTICLE_SIZE = 14;     // px cho sprite (đã scale trong shader)
+const BLOOM_STRENGTH = 1.2;   // độ glow (1.0–2.0 đẹp)
+
+/* =========================
+   Renderer + Composer (bloom)
+========================= */
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2));
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 2000);
+camera.position.set(0, 30, 160);
+
+const composer = new THREE.EffectComposer(renderer);
+const renderPass = new THREE.RenderPass(scene, camera);
+composer.addPass(renderPass);
+const bloomPass = new THREE.UnrealBloomPass(
+  new THREE.Vector2(innerWidth, innerHeight),
+  BLOOM_STRENGTH, 0.8, 0.85
+);
+composer.addPass(bloomPass);
+
+const light = new THREE.AmbientLight(0xffffff, 0.9);
+scene.add(light);
+
+/* =========================
+   Sprites (circle / heart)
+========================= */
+function makeCircleSprite(size=PARTICLE_SIZE, color='#fff'){
+  const c=document.createElement('canvas'); c.width=c.height=size;
+  const ctx=c.getContext('2d');
+  const r=size/2;
+  const g=ctx.createRadialGradient(r,r,0,r,r,r);
+  g.addColorStop(0,'#fff'); g.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(r,r,r,0,6.283); ctx.fill();
+  return new THREE.CanvasTexture(c);
+}
+function makeHeartSprite(size=PARTICLE_SIZE, color='#fff'){
+  const c=document.createElement('canvas'); c.width=c.height=size;
+  const ctx=c.getContext('2d'); ctx.translate(size/2,size/2);
+  ctx.scale(size/40, size/40);
+  ctx.fillStyle='#fff';
+  ctx.beginPath();
+  for(let t=-Math.PI; t<=Math.PI; t+=0.02){
+    const x=16*Math.sin(t)**3, y=-(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t));
+    t===-Math.PI?ctx.moveTo(x,y):ctx.lineTo(x,y);
   }
+  ctx.closePath(); ctx.fill();
+  return new THREE.CanvasTexture(c);
+}
+const spriteTex = SPRITE_SHAPE==='heart' ? makeHeartSprite() : makeCircleSprite();
 
-  /* ============ Scene ============ */
-  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
-  renderer.setSize(innerWidth, innerHeight);
-  renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2));
-  document.body.appendChild(renderer.domElement);
-
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 2000);
-  camera.position.set(0, 30, 160);
-  camera.lookAt(0,20,0);
-
-  const ambient = new THREE.AmbientLight(0xffffff, 0.9);
-  scene.add(ambient);
-
-  /* ====== Utils ====== */
-  const rand = (a,b)=> a + Math.random()*(b-a);
-  function insideHeart(x,y){ const xx=x*x, yy=y*y; return Math.pow(xx+yy-1,3) - xx*yy*y <= 0; }
-
-  function buildHeartTargets(count, scale=2.2, yOffset=35){
-    const pts = [];
-    for(let i=0;i<count;i++){
-      let x,y,tries=0;
-      do { x = rand(-18,18); y = rand(-18,18); tries++; if(tries>200) break; }
-      while(!insideHeart(x/16, y/16));
-      pts.push(new THREE.Vector3(x*scale, y*scale + yOffset, rand(-6,6)));
-    }
-    return pts;
+/* =========================
+   Helpers & targets
+========================= */
+const rand=(a,b)=>a+Math.random()*(b-a);
+function insideHeart(x,y){ const xx=x*x, yy=y*y; return Math.pow(xx+yy-1,3) - xx*yy*y <= 0; }
+function buildHeartTargets(count, scale=2.2, yOffset=38){
+  const pts=[];
+  for(let i=0;i<count;i++){
+    let x,y;
+    do{ x=rand(-18,18); y=rand(-18,18); }while(!insideHeart(x/16,y/16));
+    pts.push(new THREE.Vector3(x*scale, y*scale+yOffset, rand(-4,4)));
   }
+  return pts;
+}
+const heartTargets = buildHeartTargets(HEART_POINT_COUNT);
 
-  /* ====== Targets & arrays ====== */
-  const HEART_POINT_COUNT = 1200;
-  const heartTargets = buildHeartTargets(HEART_POINT_COUNT);
+/* =========================
+   Particles (BufferGeometry + custom shader for size/map)
+========================= */
+document.getElementById('pcnt').textContent = TOTAL.toLocaleString();
 
-  const TOTAL = 2200;
-  document.getElementById('pcnt').textContent = TOTAL.toLocaleString();
+const positions = new Float32Array(TOTAL*3);
+const colors    = new Float32Array(TOTAL*3);
+const sizesAttr = new Float32Array(TOTAL);
 
-  const positions = new Float32Array(TOTAL*3);
-  const colors    = new Float32Array(TOTAL*3);
-  const sizes     = new Float32Array(TOTAL);
+const state = new Array(TOTAL);       // 'float' | 'rise' | 'bound'
+const vel   = new Array(TOTAL);       // THREE.Vector3
+const targetIndex = new Array(TOTAL); // mục tiêu khi 'bound'
 
-  const state = new Array(TOTAL);          // 'float' | 'rise' | 'bound'
-  const vel   = new Array(TOTAL);          // THREE.Vector3
-  const targetIndex = new Array(TOTAL);    // index điểm tim khi 'bound'
+const blue = new THREE.Color('#66ccff');
+const gold = new THREE.Color('#ffd34d');
+const red  = new THREE.Color('#ff3a6a');
 
-  const blue = new THREE.Color('#66ccff');
-  const red  = new THREE.Color('#ff2a55');
-  const gold = new THREE.Color('#ffd34d');
+const bottomY=-40, floorY=-55, vortexY=-10, radiusX=90, radiusZ=80;
+const gravity=-25, swirlBase=1.7, updraft=30;
 
-  const bottomY=-40, floorY=-55, vortexY=-10, radiusX=90, radiusZ=80;
-  const gravity=-25, swirlBase=1.6, updraft=28;
+for(let i=0;i<TOTAL;i++){
+  const x=rand(-radiusX,radiusX), y=rand(floorY,bottomY), z=rand(-radiusZ,radiusZ);
+  positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
+  const c=Math.random()<0.6?blue:gold;
+  colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
+  sizesAttr[i]=rand(0.8,1.2);  // sẽ nhân với size trong shader
+  state[i]='float'; vel[i]=new THREE.Vector3(rand(-5,5),rand(5,15),rand(-5,5)); targetIndex[i]=-1;
+}
+
+const geo = new THREE.BufferGeometry();
+geo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+geo.setAttribute('color',    new THREE.BufferAttribute(colors,3));
+geo.setAttribute('aSize',    new THREE.BufferAttribute(sizesAttr,1));
+
+/* ---- Custom shader material để dùng sprite & glow đẹp ---- */
+const uniforms = {
+  uSize:        { value: SPRITE_SHAPE==='heart'? 12.0 : 10.0 },
+  uMap:         { value: spriteTex },
+  uOpacity:     { value: 1.0 }
+};
+const vshader = `
+  attribute float aSize;
+  varying vec3 vColor;
+  void main(){
+    vColor = color;
+    vec4 mvPosition = modelViewMatrix * vec4(position,1.0);
+    gl_PointSize = aSize * ${renderer.getPixelRatio().toFixed(1)} * (300.0 / -mvPosition.z);
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+const fshader = `
+  uniform sampler2D uMap;
+  uniform float uOpacity;
+  varying vec3 vColor;
+  void main(){
+    vec4 smp = texture2D(uMap, gl_PointCoord);
+    vec3 col = vColor;
+    gl_FragColor = vec4(col, smp.a * uOpacity);
+    // additive look is controlled by blending mode on material
+  }
+`;
+const mat = new THREE.ShaderMaterial({
+  uniforms, vertexShader:vshader, fragmentShader:fshader,
+  transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, vertexColors:true
+});
+const cloud = new THREE.Points(geo, mat);
+scene.add(cloud);
+
+/* =========================
+   Vortex field
+========================= */
+function vortexField(x,y,z,strength=1){
+  const dx=x, dy=y-vortexY, dz=z;
+  const r=Math.max(5, Math.hypot(dx,dz));
+  const fall=Math.exp(-(r*r)/9000);
+  const tx=(dz/r), tz=-(dx/r);
+  const swirl=swirlBase*strength*fall;
+  const pull=-0.55*strength*fall;
+  const lift=updraft*strength*(0.6+0.4*Math.exp(-(dy*dy)/400));
+
+  return {
+    vx: tx*swirl + (dx/r)*pull + (Math.random()-0.5)*0.15,
+    vy: 0.4*swirl + lift*0.02 + (Math.random()-0.5)*0.12,
+    vz: tz*swirl + (dz/r)*pull + (Math.random()-0.5)*0.15
+  };
+}
+
+/* =========================
+   Animate
+========================= */
+let tPrev = performance.now(), phase=0;
+const strengthEl = document.getElementById('strength');
+
+function animate(now){
+  requestAnimationFrame(animate);
+  const dt = Math.min(0.04, (now-tPrev)/1000); tPrev = now;
+
+  // camera sway nhẹ
+  camera.position.x = Math.sin(now*0.00025)*30;
+  camera.position.z = 160 + Math.cos(now*0.00025)*15;
+  camera.lookAt(0,22,0);
+
+  // chu kỳ 6.5s điều tiết lực xoáy
+  const period=6.5; phase=(phase+dt/period)%1;
+  const pulse = 0.75 + 0.55*Math.sin(phase*6.283);
+  const strength = parseFloat(strengthEl.value)*pulse;
 
   for(let i=0;i<TOTAL;i++){
-    const x=rand(-radiusX,radiusX), y=rand(floorY,bottomY), z=rand(-radiusZ,radiusZ);
-    positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
+    let x=positions[i*3], y=positions[i*3+1], z=positions[i*3+2];
 
-    const c = Math.random()<0.6 ? blue : gold;
-    colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
+    if(state[i]==='float'){
+      const f=vortexField(x,y,z,strength*0.6);
+      vel[i].x+=f.vx; vel[i].y+=gravity*0.02+f.vy; vel[i].z+=f.vz;
+      vel[i].multiplyScalar(0.985);
+      x+=vel[i].x*dt; y+=vel[i].y*dt; z+=vel[i].z*dt;
+      if(y>0 && Math.random()<0.03) state[i]='rise';
 
-    sizes[i]=rand(1.6,3.2);
-    state[i]='float';
-    vel[i]=new THREE.Vector3(rand(-5,5), rand(5,15), rand(-5,5));
-    targetIndex[i]=-1;
-  }
+    }else if(state[i]==='rise'){
+      const f=vortexField(x,y,z,strength*1.35);
+      vel[i].x+=f.vx; vel[i].y+=f.vy+0.7; vel[i].z+=f.vz;
+      vel[i].multiplyScalar(0.986);
+      x+=vel[i].x*dt*1.5; y+=vel[i].y*dt*1.5; z+=vel[i].z*dt*1.5;
 
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  // 🔧 Three.js cần thuộc tính tên 'color' (không phải 'customColor')
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  // (PointsMaterial không dùng 'size' nhưng giữ đây để tiện nâng cấp shader sau)
-  geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-
-  const mat = new THREE.PointsMaterial({
-    size: 3.0,                 // tăng kích thước để dễ thấy
-    sizeAttenuation: true,
-    vertexColors: true,
-    transparent: true,
-    opacity: 1.0,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-  });
-
-  const cloud = new THREE.Points(geo, mat);
-  scene.add(cloud);
-
-  function vortexField(x,y,z,strength=1){
-    const dx=x, dy=y-vortexY, dz=z;
-    const r=Math.max(5, Math.hypot(dx,dz));
-    const fall=Math.exp(-(r*r)/9000);
-    const tx=(dz/r), tz=-(dx/r);
-    const swirl=swirlBase*strength*fall;
-    const pull=-0.6*strength*fall;
-    const lift=updraft*strength*(0.6+0.4*Math.exp(-(dy*dy)/400));
-    return {
-      vx: tx*swirl + (dx/r)*pull + (Math.random()-0.5)*0.2,
-      vy: 0.4*swirl + lift*0.02 + (Math.random()-0.5)*0.15,
-      vz: tz*swirl + (dz/r)*pull + (Math.random()-0.5)*0.2
-    };
-  }
-
-  /* ====== Animate ====== */
-  let tPrev=performance.now(), phase=0;
-  const strengthEl = document.getElementById('strength');
-
-  function animate(now){
-    requestAnimationFrame(animate);
-    const dt=Math.min(0.04,(now-tPrev)/1000); tPrev=now;
-
-    camera.position.x = Math.sin(now*0.00025) * 30;
-    camera.position.z = 160 + Math.cos(now*0.00025) * 15;
-    camera.lookAt(0,20,0);
-
-    const period=6.5; phase=(phase+dt/period)%1;
-    const pulse=0.7+0.6*Math.sin(phase*Math.PI*2);
-    const strength=parseFloat(strengthEl.value)*pulse;
-
-    for(let i=0;i<TOTAL;i++){
-      let x=positions[i*3], y=positions[i*3+1], z=positions[i*3+2];
-
-      if(state[i]==='float'){
-        const f=vortexField(x,y,z,strength*0.6);
-        vel[i].x+=f.vx; vel[i].y+=gravity*0.02+f.vy; vel[i].z+=f.vz;
-        vel[i].multiplyScalar(0.98);
-        x+=vel[i].x*dt; y+=vel[i].y*dt; z+=vel[i].z*dt;
-        if(y>0 && Math.random()<0.02) state[i]='rise';
-
-      }else if(state[i]==='rise'){
-        const f=vortexField(x,y,z,strength*1.3);
-        vel[i].x+=f.vx; vel[i].y+=f.vy+0.6; vel[i].z+=f.vz;
-        vel[i].multiplyScalar(0.985);
-        x+=vel[i].x*dt*1.4; y+=vel[i].y*dt*1.4; z+=vel[i].z*dt*1.4;
-        if(y>28){
-          state[i]='bound';
-          targetIndex[i]=(Math.random()*heartTargets.length)|0;
-          colors[i*3]=1; colors[i*3+1]=0.165; colors[i*3+2]=0.333; // đỏ (#ff2a55) theo linear
-          sizes[i]=rand(1.2,2.0);
-        }
-
-      }else{ // bound
-        const t=heartTargets[targetIndex[i]], k=2.8, damp=0.90;
-        vel[i].x+=(t.x-x)*k*dt; vel[i].y+=(t.y-y)*k*dt; vel[i].z+=(t.z-z)*k*dt;
-        const f=vortexField(x,y,z,strength*0.25);
-        vel[i].x+=f.vx*0.3; vel[i].y+=f.vy*0.15; vel[i].z+=f.vz*0.3;
-        vel[i].multiplyScalar(damp);
-        x+=vel[i].x*dt; y+=vel[i].y*dt; z+=vel[i].z*dt;
-
-        if(phase>0.8 && Math.random()<0.02){
-          state[i]='float'; targetIndex[i]=-1;
-          const cc = Math.random()<0.6 ? blue : gold;
-          colors[i*3]=cc.r; colors[i*3+1]=cc.g; colors[i*3+2]=cc.b;
-          x=rand(-radiusX,radiusX); y=rand(floorY,bottomY); z=rand(-radiusZ,radiusZ);
-          sizes[i]=rand(1.6,3.2); vel[i].set(rand(-5,5),rand(5,15),rand(-5,5));
-        }
+      if(y>30){
+        state[i]='bound';
+        targetIndex[i]=(Math.random()*heartTargets.length)|0;
+        colors[i*3]=red.r; colors[i*3+1]=red.g; colors[i*3+2]=red.b;
+        sizesAttr[i]=rand(0.9,1.1);
       }
 
-      if(y<floorY-20 || Math.abs(x)>220 || Math.abs(z)>220){
+    }else{ // bound
+      const t=heartTargets[targetIndex[i]], k=3.6, damp=0.90;
+      vel[i].x+=(t.x-x)*k*dt; vel[i].y+=(t.y-y)*k*dt; vel[i].z+=(t.z-z)*k*dt;
+
+      const f=vortexField(x,y,z,strength*0.22);
+      vel[i].x+=f.vx*0.35; vel[i].y+=f.vy*0.18; vel[i].z+=f.vz*0.35;
+
+      vel[i].multiplyScalar(damp);
+      x+=vel[i].x*dt; y+=vel[i].y*dt; z+=vel[i].z*dt;
+
+      // một phần rơi lại sau mỗi chu kỳ để tạo vòng lặp
+      if(phase>0.82 && Math.random()<0.015){
         state[i]='float'; targetIndex[i]=-1;
-        const cc = Math.random()<0.6 ? blue : gold;
+        const cc=Math.random()<0.6?blue:gold;
         colors[i*3]=cc.r; colors[i*3+1]=cc.g; colors[i*3+2]=cc.b;
         x=rand(-radiusX,radiusX); y=rand(floorY,bottomY); z=rand(-radiusZ,radiusZ);
-        sizes[i]=rand(1.6,3.2); vel[i].set(rand(-5,5),rand(5,15),rand(-5,5));
+        sizesAttr[i]=rand(0.8,1.2); vel[i].set(rand(-5,5),rand(5,15),rand(-5,5));
       }
-
-      positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
     }
 
-    geo.attributes.position.needsUpdate = true;
-    geo.attributes.color.needsUpdate = true;
-    renderer.render(scene, camera);
-  }
-  requestAnimationFrame(animate);
+    // tái sinh nếu bay khỏi khung
+    if(y<floorY-20 || Math.abs(x)>220 || Math.abs(z)>220){
+      state[i]='float'; targetIndex[i]=-1;
+      const cc=Math.random()<0.6?blue:gold;
+      colors[i*3]=cc.r; colors[i*3+1]=cc.g; colors[i*3+2]=cc.b;
+      x=rand(-radiusX,radiusX); y=rand(floorY,bottomY); z=rand(-radiusZ,radiusZ);
+      sizesAttr[i]=rand(0.8,1.2); vel[i].set(rand(-5,5),rand(5,15),rand(-5,5));
+    }
 
-  // Resize
-  addEventListener('resize', ()=>{
-    renderer.setSize(innerWidth, innerHeight);
-    camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
-  });
-})();
+    positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
+  }
+
+  geo.attributes.position.needsUpdate = true;
+  geo.attributes.color.needsUpdate = true;
+  geo.attributes.aSize.needsUpdate = true;
+
+  composer.render();
+}
+requestAnimationFrame(animate);
+
+/* =========================
+   Resize
+========================= */
+addEventListener('resize', ()=>{
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+});
 </script>
 </body>
 </html>
