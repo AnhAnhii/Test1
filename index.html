@@ -87,14 +87,14 @@ function buildHeartTargets(count, scale=HEART_SCALE, yOffset=HEART_YOFFSET, edge
   for(let i=0;i<nEdge;i++){
     const t = -Math.PI + (i/nEdge)*Math.PI*2;
     const [hx,hy] = heartXY(t);
-    pts.push(new THREE.Vector3(hx*scale + rand(-0.4,0.4), ( -hy*scale + yOffset) + rand(-0.4,0.4), rand(-3,3)));
+    pts.push(new THREE.Vector3(hx*scale + rand(-0.4,0.4), ( +hy*scale + yOffset) + rand(-0.4,0.4), rand(-3,3)));
   }
   // Bên trong: co theo hệ số s (bias về gần viền với pow)
   for(let i=0;i<nFill;i++){
     const t = rand(-Math.PI, Math.PI);
     const s = Math.pow(Math.random(), 0.35); // 0..1, càng gần 1 càng sát viền
     const [hx,hy] = heartXY(t);
-    pts.push(new THREE.Vector3(hx*s*scale + rand(-0.6,0.6), (-hy*s*scale + yOffset) + rand(-0.6,0.6), rand(-4,4)));
+    pts.push(new THREE.Vector3(hx*s*scale + rand(-0.6,0.6), (+hy*s*scale + yOffset) + rand(-0.6,0.6), rand(-4,4)));
   }
   return pts;
 }
