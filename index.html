@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>3D Heart Vortex + Abe Ebe overlay</title>
+<title>3D Heart Vortex + Abe Ebe (SVG path)</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#000}
 
@@ -17,7 +17,7 @@
   #ui input[type=range]{flex:1}
   #ui label{cursor:pointer}
 
-  /* ===== Overlay chữ (đặt trên cùng, không chặn UI) ===== */
+  /* ===== Overlay chữ (trên cùng, không chặn UI) ===== */
   #love-wrap{
     position:fixed;inset:0 auto auto 0;
     width:100%;pointer-events:none;
@@ -26,34 +26,32 @@
   }
   .love-container{width:min(500px,92vw);aspect-ratio:500/200;position:relative}
   .love-svg{position:absolute;inset:0;z-index:2}
-  .love-mo{width:100%;height:100%}
+  .mo-container{width:100%;height:100%}
 
-  /* phong cách giống bản gốc */
+  /* phong cách gần bản gốc */
   .line{fill:none;stroke:#ffffff;stroke-width:8;stroke-linecap:round;stroke-miterlimit:10}
   .lttr{fill:#f2a9ff}
-  /* SVG <text> style cho chữ */
-  .lttr{font-family:"Helvetica Neue",Arial,Helvetica,sans-serif;font-weight:700;letter-spacing:.02em}
 </style>
 </head>
 <body>
 <!-- ===== Panel điều khiển ===== -->
 <div id="ui">
   <div><b>3D Trái tim Vortex</b></div>
-  <div class="row"><span style="width:110px">Cường độ</span> <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.0"></div>
-  <div class="row"><span style="width:110px">Kích thước</span> <input id="hsize" type="range" min="1.6" max="4.0" step="0.1" value="2.6"></div>
+  <div class="row"><span style="width:110px">Cường độ gió</span> <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.0"></div>
+  <div class="row"><span style="width:110px">Kích thước tim</span> <input id="hsize" type="range" min="1.6" max="4.0" step="0.1" value="2.6"></div>
   <div class="row"><span style="width:110px">Giữ hình (giây)</span> <input id="hold" type="range" min="1" max="8" step="0.5" value="3.5"></div>
   <div class="row"><span style="width:110px">% viền trái tim</span> <input id="edge" type="range" min="0" max="80" step="5" value="40"></div>
   <div class="row"><span style="width:110px">Hình hạt</span>
     <label><input type="radio" name="shape" value="heart" checked> Trái tim</label>
     <label><input type="radio" name="shape" value="circle"> Hình tròn</label>
   </div>
-  <div class="row"><span style="width:110px">Số lượng</span>
+  <div class="row"><span style="width:110px">Particles</span>
     <input id="particles" type="range" min="1200" max="8000" step="200" value="3600">
     <span style="margin-left:6px" id="pcnt"></span>
   </div>
 </div>
 
-<!-- ===== Overlay SVG theo “kiểu bản gốc” ===== -->
+<!-- ===== Overlay SVG theo cấu trúc “bản gốc” (line + group chữ) ===== -->
 <div id="love-wrap">
   <div class="love-container">
     <svg class="love-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 200" aria-hidden="true">
@@ -61,20 +59,17 @@
       <line class="line line--left" x1="10" y1="17"  x2="10"  y2="183"></line>
       <line class="line line--rght" x1="490" y1="17" x2="490" y2="183"></line>
 
-      <!-- NHÓM CHỮ: giữ cấu trúc <g> như bản gốc, nhưng dùng <text> để dễ sửa nội dung -->
+      <!-- NHÓM CHỮ: 6 phần tử path (A b e E b e) — sẽ được "đổ d" bằng opentype.js -->
       <g id="abe-ebe">
-        <!-- “Abe Ebe” — chia thành 6 phần tử như ILOVEYOU để bám theo timeline -->
-        <!-- Hàng chuẩn y=110; mỗi chữ tự có x riêng để cân giữa giống demo -->
-        <text class="lttr lttr--A"   x="95"  y="110" font-size="64">A</text>
-        <text class="lttr lttr--b1"  x="135" y="110" font-size="64">b</text>
-        <text class="lttr lttr--e1"  x="165" y="110" font-size="64">e</text>
-
-        <text class="lttr lttr--E"   x="230" y="110" font-size="64">E</text>
-        <text class="lttr lttr--b2"  x="270" y="110" font-size="64">b</text>
-        <text class="lttr lttr--e2"  x="300" y="110" font-size="64">e</text>
+        <path class="lttr lttr--A"  d=""></path>
+        <path class="lttr lttr--b1" d=""></path>
+        <path class="lttr lttr--e1" d=""></path>
+        <path class="lttr lttr--E"  d=""></path>
+        <path class="lttr lttr--b2" d=""></path>
+        <path class="lttr lttr--e2" d=""></path>
       </g>
     </svg>
-    <!-- container cho mo.js (tim nổ/boom) -->
+    <!-- container cho mo.js (nổ tim) -->
     <div class="mo-container"></div>
   </div>
 </div>
@@ -83,10 +78,89 @@
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <!-- ===== mo.js ===== -->
 <script src="https://cdn.jsdelivr.net/mojs/latest/mo.min.js"></script>
+<!-- ===== opentype.js để convert text → SVG path ===== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/opentype.js/1.3.4/opentype.min.js"></script>
 
 <script>
 /* =========================
-   PHẦN 1: Three.js vortex (giữ nguyên logic của bạn)
+   PHẦN 0: Convert “Abe Ebe” → SVG path (bản path)
+   ========================= */
+const FONT_URL = 'https://fonts.gstatic.com/s/montserrat/v25/JTURjIg1_i6t8kCHKm45xW5RYgbi.woff2'; 
+// GỢI Ý: nếu CORS lỗi, hãy thay FONT_URL bằng TTF/OTF/WOFF(2) bạn host, ví dụ:
+// const FONT_URL = 'https://your.cdn.com/fonts/Montserrat-Bold.ttf';
+
+function drawGlyphPath(font, text, sizePx, startX, baselineY, letterSpacing=0){
+  // scale tính theo unitsPerEm của font
+  const scale = sizePx / font.unitsPerEm;
+  const glyphs = font.stringToGlyphs(text);
+  let x = startX;
+  const paths = [];
+  glyphs.forEach((g, idx)=>{
+    const p = g.getPath(x, baselineY, sizePx);   // opentype trả về path theo toạ độ SVG
+    paths.push(p);
+    // tiến tới vị trí kế
+    const adv = (g.advanceWidth || font.unitsPerEm) * scale;
+    x += adv + letterSpacing;
+  });
+  // Gom thành 1 path data lớn? Ở đây ta render MỖI ký tự vào phần tử path RIÊNG biệt
+  return { paths: glyphs.map((g, i)=>g), totalAdvance: x - startX, scale, glyphs };
+}
+
+function setPathDataFromGlyph(font, ch, sizePx, x, y, targetPathEl){
+  const path = font.getPath(ch, x, y, sizePx);
+  // độ chính xác vừa phải
+  targetPathEl.setAttribute('d', path.toPathData(2));
+}
+
+(async function buildPaths(){
+  try{
+    const font = await new Promise((resolve, reject)=>{
+      opentype.load(FONT_URL, (err, f)=> err ? reject(err) : resolve(f));
+    });
+
+    // Các phần tử path
+    const A  = document.querySelector('.lttr--A');
+    const b1 = document.querySelector('.lttr--b1');
+    const e1 = document.querySelector('.lttr--e1');
+    const E  = document.querySelector('.lttr--E');
+    const b2 = document.querySelector('.lttr--b2');
+    const e2 = document.querySelector('.lttr--e2');
+
+    // Tham số bố cục (gần giống bản gốc): viewBox 500x200
+    const size = 64;                // cỡ chữ
+    const baseY = 125;              // baseline (y tăng xuống dưới)
+    // x căn tay để cân giữa
+    const xA=95, xb1=135, xe1=165, xE=230, xb2=270, xe2=300;
+
+    // Đổ d cho từng path
+    setPathDataFromGlyph(font, 'A', xA,  baseY, size, A);
+    setPathDataFromGlyph(font, 'b', xb1, baseY, size, b1);
+    setPathDataFromGlyph(font, 'e', xe1, baseY, size, e1);
+    setPathDataFromGlyph(font, 'E', xE,  baseY, size, E);
+    setPathDataFromGlyph(font, 'b', xb2, baseY, size, b2);
+    setPathDataFromGlyph(font, 'e', xe2, baseY, size, e2);
+
+  }catch(e){
+    console.warn('Không tải được font hoặc convert path lỗi:', e);
+    // Fallback rất nhẹ: nếu lỗi, sẽ render chữ bằng <text> để bạn vẫn thấy nội dung
+    const g = document.getElementById('abe-ebe');
+    if(g){
+      g.innerHTML = `
+        <text x="95"  y="115" font-size="64" fill="#f2a9ff" font-weight="700">A</text>
+        <text x="135" y="115" font-size="64" fill="#f2a9ff" font-weight="700">b</text>
+        <text x="165" y="115" font-size="64" fill="#f2a9ff" font-weight="700">e</text>
+        <text x="230" y="115" font-size="64" fill="#f2a9ff" font-weight="700">E</text>
+        <text x="270" y="115" font-size="64" fill="#f2a9ff" font-weight="700">b</text>
+        <text x="300" y="115" font-size="64" fill="#f2a9ff" font-weight="700">e</text>
+      `;
+    }
+  }
+})();
+</script>
+
+<script>
+/* =========================
+   PHẦN 1: Three.js vortex (nguyên lý như trước)
    ========================= */
 let SPRITE_SHAPE = 'heart';
 let TOTAL = 3600;
@@ -185,7 +259,6 @@ function initBuffers(total){
 }
 initBuffers(TOTAL);
 
-/* Vortex field */
 function vortexField(x,y,z,strength=1){
   const dx=x, dy=y-vortexY, dz=z;
   const r=Math.max(5, Math.hypot(dx,dz));
@@ -208,7 +281,6 @@ const holdEl=document.getElementById('hold');
 const edgeEl=document.getElementById('edge');
 const pcntEl=document.getElementById('pcnt');
 const particlesEl=document.getElementById('particles');
-
 pcntEl.textContent = TOTAL.toLocaleString();
 
 function animate(now){
@@ -288,9 +360,15 @@ document.querySelectorAll('input[name="shape"]').forEach(r=>{
     points.material.map=spriteTex; points.material.needsUpdate=true;
   };
 });
+const sizeEl=document.getElementById('hsize');
+const edgeEl=document.getElementById('edge');
+const holdEl=document.getElementById('hold');
+const pcntEl=document.getElementById('pcnt');
+const particlesEl=document.getElementById('particles');
+const strengthEl=document.getElementById('strength');
+
 sizeEl.oninput=()=>{
   HEART_SCALE=parseFloat(sizeEl.value);
-  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_YOFFSET, HEART_YOFFSET, parseFloat(edgeEl.value));
   heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
 };
 edgeEl.oninput=()=>{
@@ -312,15 +390,13 @@ addEventListener('resize', ()=>{
 });
 
 /* =========================
-   PHẦN 2: mo.js overlay cho “Abe Ebe”
-   - Giữ cấu trúc SVG <g> + class .lttr như bản gốc
-   - Chỉ khác là dùng <text> thay vì <path> để dễ đổi chữ
+   PHẦN 2: mo.js overlay cho nhóm path “Abe Ebe”
    ========================= */
 (function(){
   const qs = (s,root=document)=>root.querySelector(s);
   const el = {
     container: qs('.mo-container'),
-    // chữ
+    // 6 path chữ (đã có d do opentype đổ vào)
     A:  qs('.lttr--A'),
     b1: qs('.lttr--b1'),
     e1: qs('.lttr--e1'),
@@ -358,15 +434,14 @@ addEventListener('resize', ()=>{
   const move=1000, boom=200, easing='sin.inOut', easingBoom='sin.in', easingOut='sin.out';
   const opts={ duration:move, easing, opacity:1 };
   const resetLetters = () => [el.A,el.b1,el.e1,el.E,el.b2,el.e2].forEach(n=>{
-    n.style.opacity=1; n.style.transform='translate(0px,0px)';
+    if(!n) return; n.style.opacity=1; n.style.transform='translate(0px,0px)';
   });
 
-  // timeline: kẹp line + chạy chữ + nổ tim + replay
   const tl = new mojs.Timeline().add([
     // reset chu kỳ
     new mojs.Tween({
       duration:50, delay:4050,
-      onUpdate:p=>[el.A,el.b1,el.e1,el.E,el.b2,el.e2].forEach(n=>n.style.opacity=p),
+      onUpdate:p=>[el.A,el.b1,el.e1,el.E,el.b2,el.e2].forEach(n=>{ if(n) n.style.opacity=p; }),
       onComplete: resetLetters
     }),
 
@@ -399,7 +474,7 @@ addEventListener('resize', ()=>{
     new mojs.Html({...opts, el:el.b2, x:{0: -24}}),
     new mojs.Html({...opts, el:el.e2, x:{0: -30}}),
 
-    // Tim nổ (vẫn giữ cảm giác bản gốc)
+    // Tim nổ (giữ vibe bản gốc)
     new mojs.Shape({
       parent: el.container, shape:'heart', delay:move, fill:el.colHeart,
       x:-40, scale:{0:0.95, easing: mojs.easing.path('M0,100C2.9,86.7,33.6-7.3,46-7.3s15.2,22.7,26,22.7S89,0,100,0')},
