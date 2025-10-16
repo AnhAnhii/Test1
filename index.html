@@ -3,37 +3,40 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>3D Douyin Heart Vortex — no glow + heart size</title>
+<title>3D Heart Vortex — clearer heart + longer hold</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#000}
   #ui{
     position:fixed;left:12px;top:12px;z-index:9;
     background:rgba(20,20,20,.55);border:1px solid #2a2a2a;border-radius:10px;
-    padding:8px 10px;color:#ddd;font:12px/1.2 system-ui,Arial
+    padding:10px;color:#ddd;font:12px/1.2 system-ui,Arial;min-width:260px
   }
-  #ui input[type=range]{width:140px}
-  #ui .row{display:flex;gap:8px;align-items:center;margin-top:4px}
+  #ui .row{display:flex;gap:8px;align-items:center;margin:6px 0}
+  #ui input[type=range]{flex:1}
+  #ui label{cursor:pointer}
 </style>
 </head>
 <body>
 <div id="ui">
-  <div><b>3D Heart Vortex</b> · no glow</div>
-  <div class="row">Strength <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.1"></div>
-  <div class="row">Heart size <input id="hsize" type="range" min="1.4" max="3.6" step="0.1" value="2.4"></div>
+  <div><b>3D Heart Vortex</b></div>
+  <div class="row"><span style="width:86px">Strength</span> <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.0"></div>
+  <div class="row"><span style="width:86px">Heart size</span> <input id="hsize" type="range" min="1.6" max="4.0" step="0.1" value="2.6"></div>
+  <div class="row"><span style="width:86px">Hold (s)</span> <input id="hold" type="range" min="1" max="8" step="0.5" value="3.5"></div>
+  <div class="row"><span style="width:86px">Edge %</span> <input id="edge" type="range" min="0" max="80" step="5" value="40"></div>
   <div class="row">Shape:
     <label><input type="radio" name="shape" value="heart" checked> ❤</label>
     <label><input type="radio" name="shape" value="circle"> ●</label>
+    <span style="margin-left:auto">Particles: <span id="pcnt"></span></span>
   </div>
-  <div class="row">Particles: <span id="pcnt"></span></div>
 </div>
 
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <script>
 /* ===== Tunables ===== */
-let SPRITE_SHAPE = 'heart';           // 'heart' | 'circle'
-const TOTAL = 3200;                    // tổng hạt
-const HEART_POINT_COUNT = 2000;        // số hạt bám hình trái tim
-let HEART_SCALE = 2.4;                 // sẽ nhận từ slider
+let SPRITE_SHAPE = 'heart';              // 'heart' | 'circle'
+const TOTAL = 3600;                      // tổng hạt
+let HEART_POINT_COUNT = 2600;            // số hạt bám hình trái tim
+let HEART_SCALE = 2.6;                   // nhận từ slider
 const HEART_YOFFSET = 38;
 
 /* ===== Renderer/Scene/Camera ===== */
@@ -70,14 +73,28 @@ function makeHeart(size=64){
 }
 let spriteTex = makeHeart();
 
-/* ===== Heart targets ===== */
+/* ===== Heart sampling (edge + fill) ===== */
 const rand=(a,b)=>a+Math.random()*(b-a);
+function heartXY(t){ return [16*Math.sin(t)**3, 13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t)]; }
 function insideHeart(x,y){ const xx=x*x, yy=y*y; return Math.pow(xx+yy-1,3) - xx*yy*y <= 0; }
-function buildHeartTargets(count, scale=HEART_SCALE, yOffset=HEART_YOFFSET){
+
+function buildHeartTargets(count, scale=HEART_SCALE, yOffset=HEART_YOFFSET, edgePercent=40){
   const pts=[];
-  for(let i=0;i<count;i++){
-    let x,y; do{ x=rand(-18,18); y=rand(-18,18);}while(!insideHeart(x/16,y/16));
-    pts.push(new THREE.Vector3(x*scale, y*scale+yOffset, rand(-4,4)));
+  const nEdge = Math.floor(count * edgePercent / 100);
+  const nFill = count - nEdge;
+
+  // Viền: lấy đều theo tham số
+  for(let i=0;i<nEdge;i++){
+    const t = -Math.PI + (i/nEdge)*Math.PI*2;
+    const [hx,hy] = heartXY(t);
+    pts.push(new THREE.Vector3(hx*scale + rand(-0.4,0.4), ( -hy*scale + yOffset) + rand(-0.4,0.4), rand(-3,3)));
+  }
+  // Bên trong: co theo hệ số s (bias về gần viền với pow)
+  for(let i=0;i<nFill;i++){
+    const t = rand(-Math.PI, Math.PI);
+    const s = Math.pow(Math.random(), 0.35); // 0..1, càng gần 1 càng sát viền
+    const [hx,hy] = heartXY(t);
+    pts.push(new THREE.Vector3(hx*s*scale + rand(-0.6,0.6), (-hy*s*scale + yOffset) + rand(-0.6,0.6), rand(-4,4)));
   }
   return pts;
 }
@@ -92,13 +109,15 @@ const colors    = new Float32Array(TOTAL*3);
 const state = new Array(TOTAL);       // 'float' | 'rise' | 'bound'
 const vel   = new Array(TOTAL);       // THREE.Vector3
 const targetIndex = new Array(TOTAL);
+const boundAge = new Float32Array(TOTAL); // thời gian đã ở 'bound'
+const boundMin = new Float32Array(TOTAL); // thời gian giữ tối thiểu
 
 const blue = new THREE.Color('#66ccff');
 const gold = new THREE.Color('#ffd34d');
 const red  = new THREE.Color('#ff3a6a');
 
 const bottomY=-40, floorY=-55, vortexY=-10, radiusX=90, radiusZ=80;
-const gravity=-25, swirlBase=1.7, updraft=30;
+const gravity=-25, swirlBase=1.65, updraft=30;
 
 for(let i=0;i<TOTAL;i++){
   const x=rand(-radiusX,radiusX), y=rand(floorY,bottomY), z=rand(-radiusZ,radiusZ);
@@ -106,6 +125,7 @@ for(let i=0;i<TOTAL;i++){
   const c=Math.random()<0.6?blue:gold;
   colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
   state[i]='float'; vel[i]=new THREE.Vector3(rand(-5,5),rand(5,15),rand(-5,5)); targetIndex[i]=-1;
+  boundAge[i]=0; boundMin[i]=0;
 }
 
 const geo = new THREE.BufferGeometry();
@@ -130,9 +150,9 @@ function vortexField(x,y,z,strength=1){
   const pull=-0.55*strength*fall;
   const lift=updraft*strength*(0.6+0.4*Math.exp(-(dy*dy)/400));
   return {
-    vx: tx*swirl + (dx/r)*pull + (Math.random()-0.5)*0.12,
-    vy: 0.4*swirl + lift*0.02 + (Math.random()-0.5)*0.10,
-    vz: tz*swirl + (dz/r)*pull + (Math.random()-0.5)*0.12
+    vx: tx*swirl + (dx/r)*pull + (Math.random()-0.5)*0.08,
+    vy: 0.35*swirl + lift*0.02 + (Math.random()-0.5)*0.06,
+    vz: tz*swirl + (dz/r)*pull + (Math.random()-0.5)*0.08
   };
 }
 
@@ -140,6 +160,8 @@ function vortexField(x,y,z,strength=1){
 let tPrev=performance.now(), phase=0;
 const strengthEl=document.getElementById('strength');
 const sizeEl=document.getElementById('hsize');
+const holdEl=document.getElementById('hold');
+const edgeEl=document.getElementById('edge');
 
 function animate(now){
   requestAnimationFrame(animate);
@@ -151,8 +173,8 @@ function animate(now){
   camera.lookAt(0,HEART_YOFFSET,0);
 
   // vortex pulse
-  const period=6.5; phase=(phase+dt/period)%1;
-  const pulse=0.75 + 0.55*Math.sin(phase*6.283);
+  const period=6.8; phase=(phase+dt/period)%1;
+  const pulse=0.8 + 0.5*Math.sin(phase*6.283);
   const strength=parseFloat(strengthEl.value)*pulse;
 
   for(let i=0;i<TOTAL;i++){
@@ -169,22 +191,26 @@ function animate(now){
       const f=vortexField(x,y,z,strength*1.35);
       vel[i].x+=f.vx; vel[i].y+=f.vy+0.7; vel[i].z+=f.vz;
       vel[i].multiplyScalar(0.986);
-      x+=vel[i].x*dt*1.5; y+=vel[i].y*dt*1.5; z+=vel[i].z*dt*1.5;
-      if(y>HEART_YOFFSET-8){
+      x+=vel[i].x*dt*1.45; y+=vel[i].y*dt*1.45; z+=vel[i].z*dt*1.45;
+      if(y>HEART_YOFFSET-6){
         state[i]='bound';
         targetIndex[i]=(Math.random()*heartTargets.length)|0;
         colors[i*3]=red.r; colors[i*3+1]=red.g; colors[i*3+2]=red.b;
+        boundAge[i]=0;
+        boundMin[i]=parseFloat(holdEl.value) + Math.random()*0.7; // giữ tối thiểu
       }
 
     }else{ // bound
-      const t=heartTargets[targetIndex[i]], k=3.8, damp=0.90;
+      boundAge[i]+=dt;
+      const t=heartTargets[targetIndex[i]], k=4.2, damp=0.90;
       vel[i].x+=(t.x-x)*k*dt; vel[i].y+=(t.y-y)*k*dt; vel[i].z+=(t.z-z)*k*dt;
-      const f=vortexField(x,y,z,strength*0.22);
-      vel[i].x+=f.vx*0.35; vel[i].y+=f.vy*0.18; vel[i].z+=f.vz*0.35;
+      const f=vortexField(x,y,z,strength*0.18); // giảm nhiễu để giữ hình
+      vel[i].x+=f.vx*0.25; vel[i].y+=f.vy*0.12; vel[i].z+=f.vz*0.25;
       vel[i].multiplyScalar(damp);
       x+=vel[i].x*dt; y+=vel[i].y*dt; z+=vel[i].z*dt;
 
-      if(phase>0.82 && Math.random()<0.015){
+      // chỉ cho rơi nếu đã vượt qua thời gian giữ tối thiểu
+      if(boundAge[i] > boundMin[i] && phase>0.82 && Math.random()<0.015){
         state[i]='float'; targetIndex[i]=-1;
         const cc=Math.random()<0.6?blue:gold;
         colors[i*3]=cc.r; colors[i*3+1]=cc.g; colors[i*3+2]=cc.b;
@@ -207,14 +233,13 @@ function animate(now){
   geo.attributes.position.needsUpdate = true;
   geo.attributes.color.needsUpdate = true;
 
-  // cập nhật size sprite theo mức “Heart size” (tăng nhẹ khi tim to để cân đối)
-  const baseSize = 10 + (parseFloat(sizeEl.value)-2.4)*2;
-  points.material.size = baseSize;
+  // size sprite cân theo Heart size (nhẹ)
+  points.material.size = 10 + (HEART_SCALE-2.4)*2;
 
   renderer.render(scene, camera);
 }
 
-/* ===== Events ===== */
+/* ===== UI events ===== */
 document.querySelectorAll('input[name="shape"]').forEach(r=>{
   r.onchange=()=>{
     SPRITE_SHAPE=r.value;
@@ -224,8 +249,11 @@ document.querySelectorAll('input[name="shape"]').forEach(r=>{
 });
 sizeEl.oninput=()=>{
   HEART_SCALE=parseFloat(sizeEl.value);
-  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET);
-  // những hạt đang 'bound' tự động bám theo điểm mới (giữ cùng index)
+  // cập nhật targets theo size & edge %
+  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
+};
+edgeEl.oninput=()=>{
+  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
 };
 
 requestAnimationFrame(animate);
