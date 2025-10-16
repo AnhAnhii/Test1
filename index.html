@@ -3,144 +3,169 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>3D Heart Vortex — clearer heart + longer hold</title>
+<title>I LOVE YOU • heart vortex background</title>
 <style>
-  html,body{margin:0;height:100%;overflow:hidden;background:#000}
-  #ui{
-    position:fixed;left:12px;top:12px;z-index:9;
-    background:rgba(20,20,20,.55);border:1px solid #2a2a2a;border-radius:10px;
-    padding:10px;color:#ddd;font:12px/1.2 system-ui,Arial;min-width:260px
+  html,body{margin:0;height:100%;background:#000;overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+
+  /* ===== Overlay: I LOVE YOU ===== */
+  .overlay{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    pointer-events:none; /* để click xuyên xuống vẫn chạy */
   }
-  #ui .row{display:flex;gap:8px;align-items:center;margin:6px 0}
-  #ui input[type=range]{flex:1}
-  #ui label{cursor:pointer}
+  .title{
+    pointer-events:auto; /* bật events cho chữ */
+    display:flex; gap:0.18em; flex-wrap:wrap; justify-content:center; line-height:1;
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    font-weight:900; letter-spacing:.02em; text-transform:uppercase;
+    filter: drop-shadow(0 0 10px rgba(255, 120, 180, .7)) drop-shadow(0 0 24px rgba(255, 80, 130, .35));
+    user-select:none;
+  }
+  .title span{
+    font-size: clamp(38px, 8vw, 120px);
+    padding: 0 .02em;
+    color: #ff5aa0; /* hồng neon */
+    -webkit-text-stroke: 2px rgba(255,255,255,.12);
+    text-shadow:
+      0 0 6px rgba(255,120,180,.8),
+      0 0 18px rgba(255,80,130,.5),
+      0 0 36px rgba(255,60,110,.35);
+    transition: transform .2s ease, text-shadow .2s ease, color .2s ease;
+    cursor: pointer;
+  }
+  .title span:hover{
+    transform: translateY(-2px) scale(1.04);
+    text-shadow:
+      0 0 8px rgba(255,160,200,1),
+      0 0 26px rgba(255,120,170,.8),
+      0 0 56px rgba(255,80,130,.6);
+    color:#ff69b4;
+  }
+  .subtitle{
+    position: absolute; top: 68%; width: 100%;
+    text-align:center; color:#aee0ff; opacity:.7; font: 14px/1.4 monospace;
+    text-shadow: 0 0 12px rgba(120,200,255,.45);
+    pointer-events:none;
+  }
+
+  /* nhẹ nhàng căn giữa xuống dưới một chút cho giống site tham chiếu */
+  .overlay-inner{ transform: translateY(-6vh); }
 </style>
 </head>
 <body>
-<div id="ui">
-  <div><b>3D Heart Vortex</b></div>
-  <div class="row"><span style="width:86px">Strength</span> <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.0"></div>
-  <div class="row"><span style="width:86px">Heart size</span> <input id="hsize" type="range" min="1.6" max="4.0" step="0.1" value="2.6"></div>
-  <div class="row"><span style="width:86px">Hold (s)</span> <input id="hold" type="range" min="1" max="8" step="0.5" value="3.5"></div>
-  <div class="row"><span style="width:86px">Edge %</span> <input id="edge" type="range" min="0" max="80" step="5" value="40"></div>
-  <div class="row">Shape:
-    <label><input type="radio" name="shape" value="heart" checked> ❤</label>
-    <label><input type="radio" name="shape" value="circle"> ●</label>
-    <span style="margin-left:auto">Particles: <span id="pcnt"></span></span>
+<canvas id="cv"></canvas>
+
+<!-- ===== Overlay I LOVE YOU ===== -->
+<div class="overlay">
+  <div class="overlay-inner">
+    <div class="title" id="title">
+      <span>I</span>
+      <span>L</span><span>O</span><span>V</span><span>E</span>
+      <span>Y</span><span>O</span><span>U</span>
+    </div>
+    <div class="subtitle">hover / click các chữ để bung hạt ✨</div>
   </div>
 </div>
 
+<!-- libs -->
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/mojs/latest/mo.min.js"></script>
+
 <script>
-/* ===== Tunables ===== */
-let SPRITE_SHAPE = 'heart';              // 'heart' | 'circle'
-const TOTAL = 3600;                      // tổng hạt
-let HEART_POINT_COUNT = 2600;            // số hạt bám hình trái tim
-let HEART_SCALE = 2.6;                   // nhận từ slider
-const HEART_YOFFSET = 38;
+/* =========================================================
+   PHẦN 1 — NỀN: Trái tim hồng cố định + xoáy hạt lam bên dưới
+========================================================= */
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+renderer.setSize(innerWidth,innerHeight);
+document.body.insertBefore(renderer.domElement, document.body.firstChild);
 
-/* ===== Renderer/Scene/Camera ===== */
-const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
-renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2));
-document.body.appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,0.1,2000);
+camera.position.set(0,30,160);
+scene.add(new THREE.AmbientLight(0xffffff,1));
 
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 2000);
-camera.position.set(0, 30, 160);
-scene.add(new THREE.AmbientLight(0xffffff, 1));
+addEventListener('resize',()=>{
+  renderer.setSize(innerWidth,innerHeight);
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+});
 
-/* ===== Sprite textures ===== */
+/* Soft circle sprite */
 function makeCircle(size=64){
   const c=document.createElement('canvas'); c.width=c.height=size;
-  const ctx=c.getContext('2d'); const r=size/2;
-  const g=ctx.createRadialGradient(r,r,0,r,r,r);
-  g.addColorStop(0,'#fff'); g.addColorStop(1,'rgba(255,255,255,0)');
-  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(r,r,r,0,6.283); ctx.fill();
+  const g=c.getContext('2d'), r=size/2;
+  const gr=g.createRadialGradient(r,r,0,r,r,r);
+  gr.addColorStop(0,'#fff'); gr.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=gr; g.beginPath(); g.arc(r,r,r,0,6.283); g.fill();
   const tex=new THREE.CanvasTexture(c); tex.anisotropy=8; return tex;
 }
-function makeHeart(size=64){
-  const c=document.createElement('canvas'); c.width=c.height=size;
-  const ctx=c.getContext('2d'); ctx.translate(size/2,size/2); ctx.scale(size/40,size/40);
-  ctx.fillStyle='#fff'; ctx.beginPath();
-  for(let t=-Math.PI;t<=Math.PI;t+=0.02){
-    const x=16*Math.sin(t)**3;
-    const y=-(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t));
-    t===-Math.PI?ctx.moveTo(x,y):ctx.lineTo(x,y);
-  }
-  ctx.closePath(); ctx.fill();
-  const tex=new THREE.CanvasTexture(c); tex.anisotropy=8; return tex;
-}
-let spriteTex = makeHeart();
+const SPRITE = makeCircle();
 
-/* ===== Heart sampling (edge + fill) ===== */
-const rand=(a,b)=>a+Math.random()*(b-a);
-function heartXY(t){ return [16*Math.sin(t)**3, 13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t)]; }
-function insideHeart(x,y){ const xx=x*x, yy=y*y; return Math.pow(xx+yy-1,3) - xx*yy*y <= 0; }
-
-function buildHeartTargets(count, scale=HEART_SCALE, yOffset=HEART_YOFFSET, edgePercent=40){
-  const pts=[];
-  const nEdge = Math.floor(count * edgePercent / 100);
-  const nFill = count - nEdge;
-
-  // Viền: lấy đều theo tham số
+/* Heart sampling (edge-heavy, đúng chiều) */
+function heartXY(t){return [16*Math.sin(t)**3, 13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t)];}
+const HEART_SCALE=2.9, HEART_Y=38, HEART_POINTS=3000, EDGE_PERCENT=70;
+function buildHeartTargets(){
+  const pts=[]; const nEdge=Math.floor(HEART_POINTS*EDGE_PERCENT/100), nFill=HEART_POINTS-nEdge;
   for(let i=0;i<nEdge;i++){
-    const t = -Math.PI + (i/nEdge)*Math.PI*2;
-    const [hx,hy] = heartXY(t);
-    pts.push(new THREE.Vector3(hx*scale + rand(-0.4,0.4), ( +hy*scale + yOffset) + rand(-0.4,0.4), rand(-3,3)));
+    const t=-Math.PI+(i/nEdge)*Math.PI*2; const [hx,hy]=heartXY(t);
+    pts.push(new THREE.Vector3(hx*HEART_SCALE+rnd(-.2,.2), hy*HEART_SCALE+HEART_Y+rnd(-.2,.2), rnd(-2.5,2.5)));
   }
-  // Bên trong: co theo hệ số s (bias về gần viền với pow)
   for(let i=0;i<nFill;i++){
-    const t = rand(-Math.PI, Math.PI);
-    const s = Math.pow(Math.random(), 0.35); // 0..1, càng gần 1 càng sát viền
-    const [hx,hy] = heartXY(t);
-    pts.push(new THREE.Vector3(hx*s*scale + rand(-0.6,0.6), (+hy*s*scale + yOffset) + rand(-0.6,0.6), rand(-4,4)));
+    const t=rnd(-Math.PI,Math.PI), s=Math.pow(Math.random(),0.35); const [hx,hy]=heartXY(t);
+    pts.push(new THREE.Vector3(hx*s*HEART_SCALE+rnd(-.35,.35), hy*s*HEART_SCALE+HEART_Y+rnd(-.35,.35), rnd(-3,3)));
   }
   return pts;
 }
-let heartTargets = buildHeartTargets(HEART_POINT_COUNT);
+const heartTargets=buildHeartTargets();
 
-/* ===== Data buffers ===== */
-document.getElementById('pcnt').textContent = TOTAL.toLocaleString();
+/* Particles: lớp tim (bound sẵn) + lớp dưới (float) */
+const FLOAT_COUNT = 2200;
+const TOTAL = HEART_POINTS + FLOAT_COUNT;
 
-const positions = new Float32Array(TOTAL*3);
-const colors    = new Float32Array(TOTAL*3);
+const positions=new Float32Array(TOTAL*3);
+const colors   =new Float32Array(TOTAL*3);
+const state=new Array(TOTAL);           // 'float' | 'bound'
+const vel  =new Array(TOTAL);           // Vector3
+const target=new Array(TOTAL);          // index heartTargets
+const jitterSeed=new Float32Array(TOTAL);
 
-const state = new Array(TOTAL);       // 'float' | 'rise' | 'bound'
-const vel   = new Array(TOTAL);       // THREE.Vector3
-const targetIndex = new Array(TOTAL);
-const boundAge = new Float32Array(TOTAL); // thời gian đã ở 'bound'
-const boundMin = new Float32Array(TOTAL); // thời gian giữ tối thiểu
+const blue=new THREE.Color('#8fd9ff');  // dưới
+const pink=new THREE.Color('#ff5aa0');  // tim
 
-const blue = new THREE.Color('#66ccff');
-const gold = new THREE.Color('#ffd34d');
-const red  = new THREE.Color('#ff3a6a');
+const bottomY=-40, floorY=-55, radiusX=95, radiusZ=85;
+const vortexY=-10, gravity=-25, swirlBase=1.55, updraft=28;
 
-const bottomY=-40, floorY=-55, vortexY=-10, radiusX=90, radiusZ=80;
-const gravity=-25, swirlBase=1.65, updraft=30;
-
-for(let i=0;i<TOTAL;i++){
-  const x=rand(-radiusX,radiusX), y=rand(floorY,bottomY), z=rand(-radiusZ,radiusZ);
+/* Tim hồng sẵn */
+for(let i=0;i<HEART_POINTS;i++){
+  const t = heartTargets[i];
+  positions[i*3]=t.x + rnd(-0.3,0.3);
+  positions[i*3+1]=t.y + rnd(-0.3,0.3);
+  positions[i*3+2]=t.z + rnd(-0.3,0.3);
+  colors[i*3]=pink.r; colors[i*3+1]=pink.g; colors[i*3+2]=pink.b;
+  state[i]='bound'; target[i]=i; vel[i]=new THREE.Vector3(); jitterSeed[i]=Math.random()*1000;
+}
+/* Hạt dưới */
+for(let i=HEART_POINTS;i<TOTAL;i++){
+  const x=rnd(-radiusX,radiusX), y=rnd(floorY,bottomY), z=rnd(-radiusZ,radiusZ);
   positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
-  const c=Math.random()<0.6?blue:gold;
-  colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
-  state[i]='float'; vel[i]=new THREE.Vector3(rand(-5,5),rand(5,15),rand(-5,5)); targetIndex[i]=-1;
-  boundAge[i]=0; boundMin[i]=0;
+  colors[i*3]=blue.r; colors[i*3+1]=blue.g; colors[i*3+2]=blue.b;
+  state[i]='float'; target[i]=-1; vel[i]=new THREE.Vector3(rnd(-5,5),rnd(5,15),rnd(-5,5));
+  jitterSeed[i]=Math.random()*1000;
 }
 
-const geo = new THREE.BufferGeometry();
+const geo=new THREE.BufferGeometry();
 geo.setAttribute('position', new THREE.BufferAttribute(positions,3));
 geo.setAttribute('color',    new THREE.BufferAttribute(colors,3));
 
-const material = new THREE.PointsMaterial({
-  size: 12, sizeAttenuation:true,
-  map: spriteTex, alphaTest:0.1, transparent:true, opacity:1,
-  vertexColors:true, blending:THREE.AdditiveBlending, depthWrite:false
-});
-const points = new THREE.Points(geo, material);
+const points = new THREE.Points(geo, new THREE.PointsMaterial({
+  size:8, sizeAttenuation:true, map:SPRITE, alphaTest:.1,
+  transparent:true, opacity:1, vertexColors:true,
+  blending:THREE.AdditiveBlending, depthWrite:false
+}));
 scene.add(points);
 
-/* ===== Vortex field ===== */
+/* Vortex & wind */
 function vortexField(x,y,z,strength=1){
   const dx=x, dy=y-vortexY, dz=z;
   const r=Math.max(5, Math.hypot(dx,dz));
@@ -149,117 +174,127 @@ function vortexField(x,y,z,strength=1){
   const swirl=swirlBase*strength*fall;
   const pull=-0.55*strength*fall;
   const lift=updraft*strength*(0.6+0.4*Math.exp(-(dy*dy)/400));
-  return {
-    vx: tx*swirl + (dx/r)*pull + (Math.random()-0.5)*0.08,
-    vy: 0.35*swirl + lift*0.02 + (Math.random()-0.5)*0.06,
-    vz: tz*swirl + (dz/r)*pull + (Math.random()-0.5)*0.08
-  };
+  return { vx: tx*swirl + (dx/r)*pull, vy: 0.32*swirl + lift*0.02, vz: tz*swirl + (dz/r)*pull };
 }
 
-/* ===== Animate ===== */
-let tPrev=performance.now(), phase=0;
-const strengthEl=document.getElementById('strength');
-const sizeEl=document.getElementById('hsize');
-const holdEl=document.getElementById('hold');
-const edgeEl=document.getElementById('edge');
-
+let last=performance.now(), phase=0;
 function animate(now){
   requestAnimationFrame(animate);
-  const dt=Math.min(0.04,(now-tPrev)/1000); tPrev=now;
+  const dt=Math.min(0.04,(now-last)/1000); last=now;
 
-  // camera sway
-  camera.position.x = Math.sin(now*0.00025)*30;
-  camera.position.z = 160 + Math.cos(now*0.00025)*15;
-  camera.lookAt(0,HEART_YOFFSET,0);
+  // camera sway nhẹ giống site bạn gửi
+  camera.position.x=Math.sin(now*0.00025)*28;
+  camera.position.z=160+Math.cos(now*0.00025)*14;
+  camera.lookAt(0,HEART_Y,0);
 
-  // vortex pulse
-  const period=6.8; phase=(phase+dt/period)%1;
-  const pulse=0.8 + 0.5*Math.sin(phase*6.283);
-  const strength=parseFloat(strengthEl.value)*pulse;
+  // nhịp gió
+  const period=7.0; phase=(phase+dt/period)%1;
+  const pulse=0.85+0.45*Math.sin(phase*6.283);
+  const strength=pulse;
+  const wind = Math.max(0, (pulse-0.95)/0.35);
 
   for(let i=0;i<TOTAL;i++){
     let x=positions[i*3], y=positions[i*3+1], z=positions[i*3+2];
 
     if(state[i]==='float'){
-      const f=vortexField(x,y,z,strength*0.6);
-      vel[i].x+=f.vx; vel[i].y+=gravity*0.02+f.vy; vel[i].z+=f.vz;
+      const f=vortexField(x,y,z,strength*0.9);
+      vel[i].x += f.vx + (Math.random()-0.5)*0.2;
+      vel[i].y += (gravity*0.02) + f.vy + (Math.random()-0.5)*0.15;
+      vel[i].z += f.vz + (Math.random()-0.5)*0.2;
       vel[i].multiplyScalar(0.986);
-      x+=vel[i].x*dt; y+=vel[i].y*dt; z+=vel[i].z*dt;
-      if(y>0 && Math.random()<0.03) state[i]='rise';
+      x += vel[i].x*dt; y += vel[i].y*dt; z += vel[i].z*dt;
 
-    }else if(state[i]==='rise'){
-      const f=vortexField(x,y,z,strength*1.35);
-      vel[i].x+=f.vx; vel[i].y+=f.vy+0.7; vel[i].z+=f.vz;
-      vel[i].multiplyScalar(0.986);
-      x+=vel[i].x*dt*1.45; y+=vel[i].y*dt*1.45; z+=vel[i].z*dt*1.45;
-      if(y>HEART_YOFFSET-6){
-        state[i]='bound';
-        targetIndex[i]=(Math.random()*heartTargets.length)|0;
-        colors[i*3]=red.r; colors[i*3+1]=red.g; colors[i*3+2]=red.b;
-        boundAge[i]=0;
-        boundMin[i]=parseFloat(holdEl.value) + Math.random()*0.7; // giữ tối thiểu
+      if(y<floorY-20 || Math.abs(x)>230 || Math.abs(z)>230){
+        x=rnd(-radiusX,radiusX); y=rnd(floorY,bottomY); z=rnd(-radiusZ,radiusZ);
+        vel[i].set(rnd(-5,5),rnd(5,15),rnd(-5,5));
       }
+    } else { // bound — tim rung nhẹ theo gió, không vỡ hình
+      const tgt = heartTargets[target[i]];
+      const k = 5.0, damp = 0.90;
+      vel[i].x += (tgt.x - x)*k*dt;
+      vel[i].y += (tgt.y - y)*k*dt;
+      vel[i].z += (tgt.z - z)*k*dt;
 
-    }else{ // bound
-      boundAge[i]+=dt;
-      const t=heartTargets[targetIndex[i]], k=4.2, damp=0.90;
-      vel[i].x+=(t.x-x)*k*dt; vel[i].y+=(t.y-y)*k*dt; vel[i].z+=(t.z-z)*k*dt;
-      const f=vortexField(x,y,z,strength*0.18); // giảm nhiễu để giữ hình
-      vel[i].x+=f.vx*0.25; vel[i].y+=f.vy*0.12; vel[i].z+=f.vz*0.25;
+      const f = vortexField(x,y,z,strength*0.10*wind);
+      const tSec = now*0.001, seed=jitterSeed[i];
+      const n0 = Math.sin(tSec*1.7 + seed*3.1)*0.25*wind;
+      const n1 = Math.sin(tSec*1.9 + seed*2.2)*0.35*wind;
+      vel[i].x += f.vx*0.6 + n0*0.6;
+      vel[i].y += f.vy*0.3 + n1*0.4;
+      vel[i].z += f.vz*0.6 + n0*0.6;
+
       vel[i].multiplyScalar(damp);
-      x+=vel[i].x*dt; y+=vel[i].y*dt; z+=vel[i].z*dt;
-
-      // chỉ cho rơi nếu đã vượt qua thời gian giữ tối thiểu
-      if(boundAge[i] > boundMin[i] && phase>0.82 && Math.random()<0.015){
-        state[i]='float'; targetIndex[i]=-1;
-        const cc=Math.random()<0.6?blue:gold;
-        colors[i*3]=cc.r; colors[i*3+1]=cc.g; colors[i*3+2]=cc.b;
-        x=rand(-radiusX,radiusX); y=rand(floorY,bottomY); z=rand(-radiusZ,radiusZ);
-        vel[i].set(rand(-5,5),rand(5,15),rand(-5,5));
-      }
-    }
-
-    if(y<floorY-20 || Math.abs(x)>220 || Math.abs(z)>220){
-      state[i]='float'; targetIndex[i]=-1;
-      const cc=Math.random()<0.6?blue:gold;
-      colors[i*3]=cc.r; colors[i*3+1]=cc.g; colors[i*3+2]=cc.b;
-      x=rand(-radiusX,radiusX); y=rand(floorY,bottomY); z=rand(-radiusZ,radiusZ);
-      vel[i].set(rand(-5,5),rand(5,15),rand(-5,5));
+      x += vel[i].x*dt; y += vel[i].y*dt; z += vel[i].z*dt;
     }
 
     positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
   }
 
-  geo.attributes.position.needsUpdate = true;
-  geo.attributes.color.needsUpdate = true;
+  geo.attributes.position.needsUpdate=true;
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
 
-  // size sprite cân theo Heart size (nhẹ)
-  points.material.size = 10 + (HEART_SCALE-2.4)*2;
+/* =========================================================
+   PHẦN 2 — Overlay chữ: mo.js bursts trên từng ký tự
+========================================================= */
+const title = document.getElementById('title');
+const audioCtx = {
+  ctx: null,
+  play(freq=660, duration=0.08){
+    try{
+      if(!this.ctx) this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+      const o=this.ctx.createOscillator(), g=this.ctx.createGain();
+      o.type='sine'; o.frequency.value=freq;
+      g.gain.value=0.08; o.connect(g); g.connect(this.ctx.destination);
+      o.start(); setTimeout(()=>{o.stop();}, duration*1000);
+    }catch(e){}
+  }
+};
 
-  renderer.render(scene, camera);
+// tạo hiệu ứng nổ hạt quanh phần tử e
+function burstFor(el){
+  const rect = el.getBoundingClientRect();
+  const x = rect.left + rect.width/2;
+  const y = rect.top  + rect.height/2;
+
+  const burst = new mojs.Burst({
+    left: x, top: y,
+    radius:   {30: 90},
+    count:    14,
+    children: {
+      shape:    ['circle', 'polygon'],
+      points:   5,
+      fill:     [ '#ff7ab6', '#ffd1e6', '#aee0ff', '#ffffff' ],
+      stroke:   'none',
+      opacity:  {1:0},
+      radius:   {6: 0},
+      duration: 700,
+      easing:   'cubic.out'
+    }
+  });
+
+  const ring = new mojs.Shape({
+    left:x, top:y, shape:'circle', fill:'none',
+    stroke: '#ff8cc3', strokeWidth:{10:0}, opacity:{0.7:0},
+    radius: {0: 80}, duration: 650, easing:'cubic.out'
+  });
+
+  burst.play(); ring.play();
 }
 
-/* ===== UI events ===== */
-document.querySelectorAll('input[name="shape"]').forEach(r=>{
-  r.onchange=()=>{
-    SPRITE_SHAPE=r.value;
-    spriteTex=(SPRITE_SHAPE==='heart')?makeHeart():makeCircle();
-    points.material.map=spriteTex; points.material.needsUpdate=true;
-  };
-});
-sizeEl.oninput=()=>{
-  HEART_SCALE=parseFloat(sizeEl.value);
-  // cập nhật targets theo size & edge %
-  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
-};
-edgeEl.oninput=()=>{
-  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
-};
-
-requestAnimationFrame(animate);
-addEventListener('resize', ()=>{
-  renderer.setSize(innerWidth, innerHeight);
-  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+[...title.querySelectorAll('span')].forEach((span, idx)=>{
+  span.addEventListener('mouseenter', ()=>{
+    burstFor(span);
+    audioCtx.play(600 + idx*20);
+  });
+  span.addEventListener('click', ()=>{
+    // click: burst mạnh hơn chút
+    burstFor(span);
+    audioCtx.play(760 + idx*25, 0.12);
+    span.style.transform = 'translateY(-4px) scale(1.06)';
+    setTimeout(()=> span.style.transform='', 180);
+  });
 });
 </script>
 </body>
