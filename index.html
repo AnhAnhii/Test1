@@ -7,9 +7,15 @@
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#000}
 
+  /* ===== Canvas nền sao (luôn nằm dưới cùng) ===== */
+  #canvas{
+    position:fixed; inset:0; z-index:1; /* thấp nhất */
+    display:block; /* remove scroll gaps */
+  }
+
   /* ===== Panel gốc của bạn ===== */
   #ui{
-    position:fixed;left:12px;top:12px;z-index:9;
+    position:fixed;left:12px;top:12px;z-index:25; /* trên Three.js */
     background:rgba(20,20,20,.55);border:1px solid #2a2a2a;border-radius:10px;
     padding:10px;color:#ddd;font:12px/1.2 system-ui,Arial;min-width:260px
   }
@@ -20,27 +26,29 @@
   /* ===== Overlay LOVE (đặt trên cùng) ===== */
   #love-wrap{
     position:fixed;inset:0 auto auto 0; /* top-left */
-    width:100%;pointer-events:none; /* không chặn UI gốc */
-    z-index:20;display:flex;justify-content:center;align-items:flex-start;
+    width:100%;pointer-events:none;
+    z-index:30;display:flex;justify-content:center;align-items:flex-start;
     padding-top:10px;
   }
-  .love-container{
-    width:min(500px,92vw);height:auto;aspect-ratio:500/200;position:relative;
-  }
+  .love-container{ width:min(500px,92vw);height:auto;aspect-ratio:500/200;position:relative; }
   .love-svg{position:absolute;inset:0;z-index:2}
   .love-mo{width:100%;height:100%}
 
-  /* Style từ demo gốc, tinh chỉnh màu để nổi trên nền đen */
+  /* Style chữ LOVE */
   .love-line{fill:none;stroke:#ffffff;stroke-width:8;stroke-linecap:round;stroke-miterlimit:10}
-  .love-letter{fill:#f2a9ff} /* tím hồng sáng hơn cho nền đen */
+  .love-letter{fill:#f2a9ff}
   .love-sound{
     position:fixed;color:#f2a9ff;font-size:14px;bottom:10px;right:12px;
-    text-decoration:underline;cursor:default;z-index:25;pointer-events:auto; /* cho phép click */
+    text-decoration:underline;cursor:default;z-index:35;pointer-events:auto;
   }
   .love-sound.sound--off{text-decoration:line-through}
 </style>
 </head>
 <body>
+
+<!-- ===== NỀN SAO ===== -->
+<canvas id="canvas"></canvas>
+
 <!-- ===== Panel điều khiển gốc ===== -->
 <div id="ui">
   <div><b>Chức năng</b></div>
@@ -49,8 +57,8 @@
   <div class="row"><span style="width:86px">Thời gian giữ (s)</span> <input id="hold" type="range" min="1" max="8" step="0.5" value="3.5"></div>
   <div class="row"><span style="width:86px">% Viền</span> <input id="edge" type="range" min="0" max="80" step="5" value="40"></div>
   <div class="row">Shape:
-    <label><input type="radio" name="shape" value="Trái tim" checked> ❤</label>
-    <label><input type="radio" name="shape" value="Hình tròn"> ●</label>
+    <label><input type="radio" name="shape" value="heart" checked> ❤</label>
+    <label><input type="radio" name="shape" value="circle"> ●</label>
     <span style="margin-left:auto">Số lượng hạt: <span id="pcnt"></span></span>
   </div>
 </div>
@@ -85,18 +93,96 @@
 
 <script>
 /* =========================
+   NỀN SAO (đặt làm background)
+   ========================= */
+(function drawStars(){
+  var canvas = document.getElementById("canvas"),
+      ctx = canvas.getContext("2d"),
+      w = (canvas.width = window.innerWidth),
+      h = (canvas.height = window.innerHeight),
+      hue = 217,
+      stars = [],
+      count = 0,
+      maxStars = 1300;
+
+  var canvas2 = document.createElement("canvas"),
+      ctx2 = canvas2.getContext("2d");
+  canvas2.width = 100; canvas2.height = 100;
+  var half = canvas2.width / 2,
+      gradient2 = ctx2.createRadialGradient(half, half, 0, half, half, half);
+  gradient2.addColorStop(0.025, "#CCC");
+  gradient2.addColorStop(0.1, "hsl(" + hue + ", 61%, 33%)");
+  gradient2.addColorStop(0.25, "hsl(" + hue + ", 64%, 6%)");
+  gradient2.addColorStop(1, "transparent");
+  ctx2.fillStyle = gradient2; ctx2.beginPath(); ctx2.arc(half, half, half, 0, Math.PI * 2); ctx2.fill();
+
+  function random(min, max){
+    if (arguments.length < 2){ max = min; min = 0; }
+    if (min > max){ var hold = max; max = min; min = hold; }
+    return Math.floor(Math.random()*(max-min+1))+min;
+  }
+  function maxOrbit(x,y){
+    var max = Math.max(x,y), diameter = Math.round(Math.sqrt(max*max+max*max));
+    return diameter/2;
+  }
+  var Star = function(){
+    this.orbitRadius = random(maxOrbit(w,h));
+    this.radius = random(60, this.orbitRadius) / 8;
+    this.orbitX = w/2; this.orbitY = h/2;
+    this.timePassed = random(0, maxStars);
+    this.speed = random(this.orbitRadius) / 50000;
+    this.alpha = random(2,10)/10;
+    count++; stars[count] = this;
+  };
+  Star.prototype.draw = function(){
+    var x = Math.sin(this.timePassed) * this.orbitRadius + this.orbitX,
+        y = Math.cos(this.timePassed) * this.orbitRadius + this.orbitY,
+        twinkle = random(10);
+
+    if (twinkle === 1 && this.alpha > 0) this.alpha -= 0.05;
+    else if (twinkle === 2 && this.alpha < 1) this.alpha += 0.05;
+
+    ctx.globalAlpha = this.alpha;
+    ctx.drawImage(canvas2, x - this.radius/2, y - this.radius/2, this.radius, this.radius);
+    this.timePassed += this.speed;
+  };
+
+  for (var i=0; i<maxStars; i++){ new Star(); }
+
+  function animation(){
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = "hsla(" + hue + ", 64%, 6%, 2)";
+    ctx.fillRect(0,0,w,h);
+
+    ctx.globalCompositeOperation = "lighter";
+    for (var i=1,l=stars.length;i<l;i++){ stars[i].draw(); }
+    window.requestAnimationFrame(animation);
+  }
+  animation();
+
+  // Đảm bảo full-screen khi đổi kích thước
+  window.addEventListener('resize', function(){
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  });
+})();
+
+/* =========================
    PHẦN 1: Three.js vortex gốc
    ========================= */
 let SPRITE_SHAPE = 'heart';
 const TOTAL = 2627;
 let HEART_POINT_COUNT = 5000;
 let HEART_SCALE = 2.6;
-const HEART_YOFFSET = 38;
+const HEART_Y_OFFSET = 38;
 
 const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2));
 document.body.appendChild(renderer.domElement);
+// xếp lớp trên nền sao nhưng không chặn click panel
+Object.assign(renderer.domElement.style, { position:'fixed', inset:'0', zIndex:5, pointerEvents:'none' });
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 2000);
@@ -127,7 +213,7 @@ let spriteTex = makeHeart();
 
 const rand=(a,b)=>a+Math.random()*(b-a);
 function heartXY(t){ return [16*Math.sin(t)**3, 13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t)]; }
-function buildHeartTargets(count, scale=HEART_SCALE, yOffset=HEART_YOFFSET, edgePercent=40){
+function buildHeartTargets(count, scale=HEART_SCALE, yOffset=HEART_Y_OFFSET, edgePercent=40){
   const pts=[]; const nEdge = Math.floor(count * edgePercent / 100); const nFill = count - nEdge;
   for(let i=0;i<nEdge;i++){
     const t = -Math.PI + (i/nEdge)*Math.PI*2;
@@ -206,7 +292,7 @@ function animate(now){
 
   camera.position.x = Math.sin(now*0.00025)*30;
   camera.position.z = 160 + Math.cos(now*0.00025)*15;
-  camera.lookAt(0,HEART_YOFFSET,0);
+  camera.lookAt(0,HEART_Y_OFFSET,0);
 
   const period=6.8; phase=(phase+dt/period)%1;
   const pulse=0.8 + 0.5*Math.sin(phase*6.283);
@@ -227,7 +313,7 @@ function animate(now){
       vel[i].x+=f.vx; vel[i].y+=f.vy+0.7; vel[i].z+=f.vz;
       vel[i].multiplyScalar(0.986);
       x+=vel[i].x*dt*1.45; y+=vel[i].y*dt*1.45; z+=vel[i].z*dt*1.45;
-      if(y>HEART_YOFFSET-6){
+      if(y>HEART_Y_OFFSET-6){
         state[i]='bound';
         targetIndex[i]=(Math.random()*heartTargets.length)|0;
         colors[i*3]=red.r; colors[i*3+1]=red.g; colors[i*3+2]=red.b;
@@ -278,10 +364,10 @@ document.querySelectorAll('input[name="shape"]').forEach(r=>{
 });
 sizeEl.oninput=()=>{
   HEART_SCALE=parseFloat(sizeEl.value);
-  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
+  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_Y_OFFSET, parseFloat(edgeEl.value));
 };
 edgeEl.oninput=()=>{
-  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
+  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_Y_OFFSET, parseFloat(edgeEl.value));
 };
 requestAnimationFrame(animate);
 addEventListener('resize', ()=>{
@@ -309,8 +395,8 @@ addEventListener('resize', ()=>{
     blup: new Audio('https://www.freesound.org/data/previews/265/265115_4373976-lq.mp3'),
     blop: new Audio('https://www.freesound.org/data/previews/265/265115_4373976-lq.mp3'),
     sound: qs('.love-sound'),
-    colTxt: "#f2a9ff",   // tím hồng sáng
-    colHeart: "#fa4843"  // đỏ trái tim
+    colTxt: "#f2a9ff",
+    colHeart: "#fa4843"
   };
 
   class Heart extends mojs.CustomShape {
@@ -359,26 +445,13 @@ addEventListener('resize', ()=>{
         }
       }),
 
-      new mojs.Tween({
-        duration: move*3 + boom*2 - delta,
-        onComplete: ()=>{ loveEl.i.style.opacity=0; loveEl.blop.play(); }
-      }),
-
-      new mojs.Tween({
-        duration: move*3 + boom*2,
-        onComplete: ()=>{ loveEl.u.style.opacity=0; loveEl.blup.play(); }
-      }),
+      new mojs.Tween({ duration: move*3 + boom*2 - delta, onComplete: ()=>{ loveEl.i.style.opacity=0; loveEl.blop.play(); } }),
+      new mojs.Tween({ duration: move*3 + boom*2, onComplete: ()=>{ loveEl.u.style.opacity=0; loveEl.blup.play(); } }),
 
       new mojs.Tween({
         duration:50, delay:4050,
-        onUpdate:(p)=>{
-          [loveEl.i,loveEl.l,loveEl.o,loveEl.v,loveEl.e,loveEl.y,loveEl.o2,loveEl.u]
-          .forEach(n=> n.style.opacity = p);
-        },
-        onComplete: ()=>{
-          [loveEl.i,loveEl.l,loveEl.o,loveEl.v,loveEl.e,loveEl.y,loveEl.o2,loveEl.u]
-          .forEach(n=>{ n.style.opacity=1; n.style.transform='translate(0,0)'; });
-        }
+        onUpdate:(p)=>{ [loveEl.i,loveEl.l,loveEl.o,loveEl.v,loveEl.e,loveEl.y,loveEl.o2,loveEl.u].forEach(n=> n.style.opacity = p); },
+        onComplete: ()=>{ [loveEl.i,loveEl.l,loveEl.o,loveEl.v,loveEl.e,loveEl.y,loveEl.o2,loveEl.u].forEach(n=>{ n.style.opacity=1; n.style.transform='translate(0,0)'; }); }
       }),
 
       new mojs.Html({...opts, el:loveEl.lineLeft, x:{0:52}})
