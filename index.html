@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>3D Douyin Heart Vortex (Three.js)</title>
+<title>3D Douyin Heart Vortex (Three.js) – FIX</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#000}
   #ui{
@@ -12,6 +12,7 @@
     padding:8px 10px;color:#ddd;font:12px/1.2 system-ui,Arial
   }
   #ui input[type=range]{width:120px}
+  #err{position:fixed;inset:auto 12px 12px 12px;color:#f88;font:12px/1.3 monospace}
 </style>
 </head>
 <body>
@@ -20,286 +21,195 @@
   <div>Strength <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.0"></div>
   <div>Particles: <span id="pcnt"></span></div>
 </div>
+<pre id="err"></pre>
 
-<!-- Three.js CDN -->
+<!-- Three.js -->
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <script>
-/* ============ Scene ============ */
-const W = innerWidth, H = innerHeight;
-const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
-renderer.setSize(W, H);
-renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2));
-document.body.appendChild(renderer.domElement);
-
-const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x000000, 0.015);
-
-const camera = new THREE.PerspectiveCamera(55, W/H, 0.1, 2000);
-camera.position.set(0, 30, 160);
-
-const light = new THREE.AmbientLight(0xffffff, 0.8);
-scene.add(light);
-const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-dir.position.set(50,100,40);
-scene.add(dir);
-
-/* ============ Helpers ============ */
-function rand(a,b){ return a + Math.random()*(b-a); }
-function heart2D(t){
-  const x = 16 * Math.pow(Math.sin(t), 3);
-  const y = 13*Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(4*t);
-  return new THREE.Vector2(x, y);
-}
-function insideHeart(x,y){
-  // Implicit heart: (x^2 + y^2 -1)^3 - x^2 y^3 <= 0
-  const xx=x*x, yy=y*y;
-  return Math.pow(xx+yy-1,3) - xx*yy*y <= 0;
-}
-
-/* ============ Target: Heart point cloud (3D) ============ */
-function buildHeartTargets(count, scale=2.2, yOffset=35){
-  const pts = [];
-  // Lấy điểm trong vùng tim 2D rồi "đùn" nhỏ theo trục Z để pseudo-3D
-  const grid = 120;
-  for(let i=0;i<count;i++){
-    let x,y,tries=0;
-    do {
-      x = rand(-18, 18);
-      y = rand(-18, 18);
-      tries++;
-      if(tries>200) break;
-    } while(!insideHeart(x/16, y/16)); // chuẩn hóa nhẹ để dễ lọc
-
-    const vx = x*scale;
-    const vy = y*scale + yOffset;
-    const vz = rand(-6,6);            // độ dày tim theo Z
-    pts.push(new THREE.Vector3(vx, vy, vz));
+(function(){
+  const errBox = document.getElementById('err');
+  if (!('WebGLRenderingContext' in window)) {
+    errBox.textContent = 'Trình duyệt không hỗ trợ WebGL.';
+    return;
   }
-  return pts;
-}
 
-const HEART_POINT_COUNT = 1200;
-const heartTargets = buildHeartTargets(HEART_POINT_COUNT);
+  /* ============ Scene ============ */
+  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2));
+  document.body.appendChild(renderer.domElement);
 
-/* ============ Particles (one Points geometry) ============ */
-const TOTAL = 2200;                 // tổng số hạt (xanh + đỏ)
-document.getElementById('pcnt').textContent = TOTAL.toLocaleString();
-
-const positions = new Float32Array(TOTAL * 3);
-const colors    = new Float32Array(TOTAL * 3);
-const sizes     = new Float32Array(TOTAL);
-
-// Các trạng thái cho từng hạt
-const state = new Array(TOTAL); // 'float' | 'rise' | 'bound'
-const vel   = new Array(TOTAL); // THREE.Vector3
-const targetIndex = new Array(TOTAL); // index mục tiêu trong heartTargets cho hạt bound
-
-// Tham số
-const blueColor = new THREE.Color('#66ccff');
-const redColor  = new THREE.Color('#ff2a55');
-const goldColor = new THREE.Color('#ffd34d');
-
-const bottomY   = -40;    // vùng xuất phát hạt (phía dưới)
-const floorY    = -55;    // sàn
-const vortexY   = -10;    // cao độ tâm xoáy
-const radiusX   = 90;     // bề rộng phát hạt
-const radiusZ   = 80;
-const gravity   = -25;    // trọng lực cho hạt "float"
-const swirlBase = 1.6;    // cường độ xoáy cơ bản
-const updraft   = 28;     // nâng lên theo trục Y
-
-// Khởi tạo
-for(let i=0;i<TOTAL;i++){
-  const x = rand(-radiusX, radiusX);
-  const y = rand(floorY, bottomY);
-  const z = rand(-radiusZ, radiusZ);
-  positions[i*3+0] = x;
-  positions[i*3+1] = y;
-  positions[i*3+2] = z;
-
-  // bắt đầu bằng "float" (xanh/gold lấp lánh)
-  const c = Math.random()<0.6 ? blueColor : goldColor;
-  colors[i*3+0] = c.r; colors[i*3+1] = c.g; colors[i*3+2] = c.b;
-
-  sizes[i] = rand(1.2, 2.6);
-  state[i] = 'float';
-  vel[i]   = new THREE.Vector3(rand(-5,5), rand(5,15), rand(-5,5));
-  targetIndex[i] = -1;
-}
-
-// Geometry + material
-const geo = new THREE.BufferGeometry();
-geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-geo.setAttribute('customColor', new THREE.BufferAttribute(colors, 3));
-geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-
-const mat = new THREE.PointsMaterial({
-  size: 2.0,
-  vertexColors: true,
-  transparent: true,
-  opacity: 1.0,
-  blending: THREE.AdditiveBlending,
-  depthWrite: false
-});
-const points = new THREE.Points(geo, mat);
-scene.add(points);
-
-/* ============ Vortex field ============ */
-function vortexField(x,y,z, strength=1){
-  // lốc quanh trục Y (tâm xoáy ở (0, vortexY, 0))
-  const dx = x, dy = y - vortexY, dz = z;
-  const r  = Math.max(5, Math.sqrt(dx*dx + dz*dz)); // khoảng cách tới trục Y
-  const fall = Math.exp(-(r*r)/9000);                // giảm theo bán kính
-
-  // thành phần xoáy quanh trục Y
-  const tx =  (dz / r);
-  const tz = -(dx / r);
-  const swirl = swirlBase * strength * fall;
-
-  // lực hướng vào trục + nâng lên
-  const pull  = -0.6 * strength * fall;
-  const lift  = updraft * strength * (0.6 + 0.4*Math.exp(-(dy*dy)/400));
-
-  const vx = tx * swirl + (dx/r) * pull + (Math.random()-0.5)*0.2;
-  const vy = 0.4*swirl + lift*0.02 + (Math.random()-0.5)*0.15;
-  const vz = tz * swirl + (dz/r) * pull + (Math.random()-0.5)*0.2;
-
-  return {vx, vy, vz};
-}
-
-/* ============ Animation ============ */
-let tPrev = performance.now();
-let loopPhase = 0; // 0..1 cho chu kỳ lặp (điều tiết lúc xoáy mạnh)
-const strengthSlider = document.getElementById('strength');
-
-function animate(now){
-  requestAnimationFrame(animate);
-  const dt = Math.min(0.04, (now - tPrev) / 1000);
-  tPrev = now;
-
-  // Xoay camera nhẹ cho cảm giác 3D
-  camera.position.x = Math.sin(now*0.00025) * 30;
-  camera.position.z = 160 + Math.cos(now*0.00025) * 15;
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 2000);
+  camera.position.set(0, 30, 160);
   camera.lookAt(0,20,0);
 
-  // chu kỳ 6.5s: 0→ hút mạnh (nhiễu tim), 1→ hút nhẹ (tim ổn định)
-  const period = 6.5;
-  loopPhase = (loopPhase + dt/period) % 1;
-  const pulse = 0.7 + 0.6*Math.sin(loopPhase * Math.PI*2); // 0.1..1.3
+  const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+  scene.add(ambient);
 
-  const strength = parseFloat(strengthSlider.value) * pulse;
+  /* ====== Utils ====== */
+  const rand = (a,b)=> a + Math.random()*(b-a);
+  function insideHeart(x,y){ const xx=x*x, yy=y*y; return Math.pow(xx+yy-1,3) - xx*yy*y <= 0; }
 
-  // cập nhật từng hạt
-  for(let i=0;i<TOTAL;i++){
-    let x = positions[i*3+0];
-    let y = positions[i*3+1];
-    let z = positions[i*3+2];
-
-    if(state[i] === 'float'){
-      // chịu trọng lực + gió xoáy nhẹ
-      const f = vortexField(x,y,z, strength*0.6);
-      vel[i].x += f.vx;
-      vel[i].y += (gravity*0.02) + f.vy;
-      vel[i].z += f.vz;
-
-      // ma sát
-      vel[i].multiplyScalar(0.98);
-
-      x += vel[i].x * dt;
-      y += vel[i].y * dt;
-      z += vel[i].z * dt;
-
-      // nếu lên tới vùng trung tâm → chuyển 'rise'
-      if(y > 0 && Math.random()<0.02) state[i] = 'rise';
-
-    } else if(state[i] === 'rise'){
-      // bị hút mạnh theo lốc xoáy đi lên
-      const f = vortexField(x,y,z, strength*1.3);
-      vel[i].x += f.vx;
-      vel[i].y += f.vy + 0.6;
-      vel[i].z += f.vz;
-      vel[i].multiplyScalar(0.985);
-
-      x += vel[i].x * dt * 1.4;
-      y += vel[i].y * dt * 1.4;
-      z += vel[i].z * dt * 1.4;
-
-      // gần vùng trái tim (y > 28) → gán mục tiêu điểm tim
-      if(y > 28){
-        state[i] = 'bound';
-        targetIndex[i] = (Math.random() * heartTargets.length) | 0;
-        // đổi màu sang đỏ
-        colors[i*3+0] = redColor.r; colors[i*3+1] = redColor.g; colors[i*3+2] = redColor.b;
-        sizes[i] = rand(1.2, 2.0);
-      }
-
-    } else { // 'bound' — bám quanh vị trí tim nhưng bị nhiễu theo xoáy
-      const t = heartTargets[targetIndex[i]];
-      // lò xo kéo về vị trí tim
-      const k = 2.8, damp = 0.90;
-      vel[i].x += (t.x - x) * k * dt;
-      vel[i].y += (t.y - y) * k * dt;
-      vel[i].z += (t.z - z) * k * dt;
-
-      // nhiễu từ trường xoáy để "rung" hình tim
-      const f = vortexField(x,y,z, strength*0.25);
-      vel[i].x += f.vx * 0.3;
-      vel[i].y += f.vy * 0.15;
-      vel[i].z += f.vz * 0.3;
-
-      vel[i].multiplyScalar(damp);
-
-      x += vel[i].x * dt * 60/60; // chuẩn hoá
-      y += vel[i].y * dt * 60/60;
-      z += vel[i].z * dt * 60/60;
-
-      // tới cuối chu kỳ mạnh → một phần rơi lại dưới (reset vòng lặp)
-      if(loopPhase > 0.8 && Math.random()<0.02){
-        state[i] = 'float';
-        targetIndex[i] = -1;
-        colors[i*3+0] = (Math.random()<0.5? blueColor : goldColor).r;
-        colors[i*3+1] = (Math.random()<0.5? blueColor : goldColor).g;
-        colors[i*3+2] = (Math.random()<0.5? blueColor : goldColor).b;
-        x = rand(-radiusX, radiusX);
-        y = rand(floorY, bottomY);
-        z = rand(-radiusZ, radiusZ);
-        sizes[i] = rand(1.4, 2.6);
-        vel[i].set(rand(-5,5), rand(5,15), rand(-5,5));
-      }
+  function buildHeartTargets(count, scale=2.2, yOffset=35){
+    const pts = [];
+    for(let i=0;i<count;i++){
+      let x,y,tries=0;
+      do { x = rand(-18,18); y = rand(-18,18); tries++; if(tries>200) break; }
+      while(!insideHeart(x/16, y/16));
+      pts.push(new THREE.Vector3(x*scale, y*scale + yOffset, rand(-6,6)));
     }
-
-    // giới hạn & tái sinh nếu ra khỏi khung
-    if(y < floorY-20 || Math.abs(x) > 220 || Math.abs(z) > 220){
-      state[i] = 'float';
-      x = rand(-radiusX, radiusX);
-      y = rand(floorY, bottomY);
-      z = rand(-radiusZ, radiusZ);
-      const c = Math.random()<0.6 ? blueColor : goldColor;
-      colors[i*3+0] = c.r; colors[i*3+1] = c.g; colors[i*3+2] = c.b;
-      sizes[i] = rand(1.4, 2.6);
-      vel[i].set(rand(-5,5), rand(5,15), rand(-5,5));
-      targetIndex[i] = -1;
-    }
-
-    positions[i*3+0] = x;
-    positions[i*3+1] = y;
-    positions[i*3+2] = z;
+    return pts;
   }
 
-  geo.attributes.position.needsUpdate = true;
-  geo.attributes.customColor.needsUpdate = true;
-  geo.attributes.size.needsUpdate = true;
+  /* ====== Targets & arrays ====== */
+  const HEART_POINT_COUNT = 1200;
+  const heartTargets = buildHeartTargets(HEART_POINT_COUNT);
 
-  renderer.render(scene, camera);
-}
-requestAnimationFrame(animate);
+  const TOTAL = 2200;
+  document.getElementById('pcnt').textContent = TOTAL.toLocaleString();
 
-/* ============ Resize ============ */
-addEventListener('resize', ()=>{
-  const w = innerWidth, h = innerHeight;
-  renderer.setSize(w, h);
-  camera.aspect = w/h; camera.updateProjectionMatrix();
-});
+  const positions = new Float32Array(TOTAL*3);
+  const colors    = new Float32Array(TOTAL*3);
+  const sizes     = new Float32Array(TOTAL);
+
+  const state = new Array(TOTAL);          // 'float' | 'rise' | 'bound'
+  const vel   = new Array(TOTAL);          // THREE.Vector3
+  const targetIndex = new Array(TOTAL);    // index điểm tim khi 'bound'
+
+  const blue = new THREE.Color('#66ccff');
+  const red  = new THREE.Color('#ff2a55');
+  const gold = new THREE.Color('#ffd34d');
+
+  const bottomY=-40, floorY=-55, vortexY=-10, radiusX=90, radiusZ=80;
+  const gravity=-25, swirlBase=1.6, updraft=28;
+
+  for(let i=0;i<TOTAL;i++){
+    const x=rand(-radiusX,radiusX), y=rand(floorY,bottomY), z=rand(-radiusZ,radiusZ);
+    positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
+
+    const c = Math.random()<0.6 ? blue : gold;
+    colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
+
+    sizes[i]=rand(1.6,3.2);
+    state[i]='float';
+    vel[i]=new THREE.Vector3(rand(-5,5), rand(5,15), rand(-5,5));
+    targetIndex[i]=-1;
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  // 🔧 Three.js cần thuộc tính tên 'color' (không phải 'customColor')
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  // (PointsMaterial không dùng 'size' nhưng giữ đây để tiện nâng cấp shader sau)
+  geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+  const mat = new THREE.PointsMaterial({
+    size: 3.0,                 // tăng kích thước để dễ thấy
+    sizeAttenuation: true,
+    vertexColors: true,
+    transparent: true,
+    opacity: 1.0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+
+  const cloud = new THREE.Points(geo, mat);
+  scene.add(cloud);
+
+  function vortexField(x,y,z,strength=1){
+    const dx=x, dy=y-vortexY, dz=z;
+    const r=Math.max(5, Math.hypot(dx,dz));
+    const fall=Math.exp(-(r*r)/9000);
+    const tx=(dz/r), tz=-(dx/r);
+    const swirl=swirlBase*strength*fall;
+    const pull=-0.6*strength*fall;
+    const lift=updraft*strength*(0.6+0.4*Math.exp(-(dy*dy)/400));
+    return {
+      vx: tx*swirl + (dx/r)*pull + (Math.random()-0.5)*0.2,
+      vy: 0.4*swirl + lift*0.02 + (Math.random()-0.5)*0.15,
+      vz: tz*swirl + (dz/r)*pull + (Math.random()-0.5)*0.2
+    };
+  }
+
+  /* ====== Animate ====== */
+  let tPrev=performance.now(), phase=0;
+  const strengthEl = document.getElementById('strength');
+
+  function animate(now){
+    requestAnimationFrame(animate);
+    const dt=Math.min(0.04,(now-tPrev)/1000); tPrev=now;
+
+    camera.position.x = Math.sin(now*0.00025) * 30;
+    camera.position.z = 160 + Math.cos(now*0.00025) * 15;
+    camera.lookAt(0,20,0);
+
+    const period=6.5; phase=(phase+dt/period)%1;
+    const pulse=0.7+0.6*Math.sin(phase*Math.PI*2);
+    const strength=parseFloat(strengthEl.value)*pulse;
+
+    for(let i=0;i<TOTAL;i++){
+      let x=positions[i*3], y=positions[i*3+1], z=positions[i*3+2];
+
+      if(state[i]==='float'){
+        const f=vortexField(x,y,z,strength*0.6);
+        vel[i].x+=f.vx; vel[i].y+=gravity*0.02+f.vy; vel[i].z+=f.vz;
+        vel[i].multiplyScalar(0.98);
+        x+=vel[i].x*dt; y+=vel[i].y*dt; z+=vel[i].z*dt;
+        if(y>0 && Math.random()<0.02) state[i]='rise';
+
+      }else if(state[i]==='rise'){
+        const f=vortexField(x,y,z,strength*1.3);
+        vel[i].x+=f.vx; vel[i].y+=f.vy+0.6; vel[i].z+=f.vz;
+        vel[i].multiplyScalar(0.985);
+        x+=vel[i].x*dt*1.4; y+=vel[i].y*dt*1.4; z+=vel[i].z*dt*1.4;
+        if(y>28){
+          state[i]='bound';
+          targetIndex[i]=(Math.random()*heartTargets.length)|0;
+          colors[i*3]=1; colors[i*3+1]=0.165; colors[i*3+2]=0.333; // đỏ (#ff2a55) theo linear
+          sizes[i]=rand(1.2,2.0);
+        }
+
+      }else{ // bound
+        const t=heartTargets[targetIndex[i]], k=2.8, damp=0.90;
+        vel[i].x+=(t.x-x)*k*dt; vel[i].y+=(t.y-y)*k*dt; vel[i].z+=(t.z-z)*k*dt;
+        const f=vortexField(x,y,z,strength*0.25);
+        vel[i].x+=f.vx*0.3; vel[i].y+=f.vy*0.15; vel[i].z+=f.vz*0.3;
+        vel[i].multiplyScalar(damp);
+        x+=vel[i].x*dt; y+=vel[i].y*dt; z+=vel[i].z*dt;
+
+        if(phase>0.8 && Math.random()<0.02){
+          state[i]='float'; targetIndex[i]=-1;
+          const cc = Math.random()<0.6 ? blue : gold;
+          colors[i*3]=cc.r; colors[i*3+1]=cc.g; colors[i*3+2]=cc.b;
+          x=rand(-radiusX,radiusX); y=rand(floorY,bottomY); z=rand(-radiusZ,radiusZ);
+          sizes[i]=rand(1.6,3.2); vel[i].set(rand(-5,5),rand(5,15),rand(-5,5));
+        }
+      }
+
+      if(y<floorY-20 || Math.abs(x)>220 || Math.abs(z)>220){
+        state[i]='float'; targetIndex[i]=-1;
+        const cc = Math.random()<0.6 ? blue : gold;
+        colors[i*3]=cc.r; colors[i*3+1]=cc.g; colors[i*3+2]=cc.b;
+        x=rand(-radiusX,radiusX); y=rand(floorY,bottomY); z=rand(-radiusZ,radiusZ);
+        sizes[i]=rand(1.6,3.2); vel[i].set(rand(-5,5),rand(5,15),rand(-5,5));
+      }
+
+      positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
+    }
+
+    geo.attributes.position.needsUpdate = true;
+    geo.attributes.color.needsUpdate = true;
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(animate);
+
+  // Resize
+  addEventListener('resize', ()=>{
+    renderer.setSize(innerWidth, innerHeight);
+    camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  });
+})();
 </script>
 </body>
 </html>
