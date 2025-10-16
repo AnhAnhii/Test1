@@ -1,49 +1,146 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"/>
-<title>Fireworks to Heart</title><style>
-html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{width:100%;height:100%;display:block}
-</style></head><body><canvas id="cv"></canvas>
-<script>
-const c=document.getElementById('cv'), g=c.getContext('2d'), DPR=Math.min(devicePixelRatio||1,2);
-function R(){c.width=innerWidth*DPR;c.height=innerHeight*DPR;g.setTransform(DPR,0,0,DPR,0,0)} addEventListener('resize',R);R();
-
-function heart(t){return [16*Math.sin(t)**3,13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t)]}
-const cx=()=>innerWidth/2, cy=()=>innerHeight/2, S=()=>Math.min(innerWidth,innerHeight)/34;
-
-class P{constructor(x,y,dx,dy,h){this.x=x;this.y=y;this.dx=dx;this.dy=dy;this.h=h;this.age=0;this.phase='out'}}
-function burst(){
-  const x=cx()+(Math.random()-.5)*100, y=cy()+(Math.random()-.5)*80, h=Math.floor(Math.random()*360);
-  for(let i=0;i<200;i++){
-    const a=Math.random()*6.283, v=80+Math.random()*140;
-    ps.push(new P(x,y,Math.cos(a)*v,Math.sin(a)*v,h));
-  }
-}
-function toHeart(p){
-  const t=Math.random()*6.283, [hx,hy]=heart(t), s=S();
-  return {x:cx()+hx*s, y:cy()-hy*s};
-}
-let ps=[]; burst(); let last=performance.now();
-function loop(now){
-  requestAnimationFrame(loop);
-  const dt=Math.min(0.032,(now-last)/1000); last=now;
-  g.fillStyle="rgba(0,0,0,.25)"; g.fillRect(0,0,innerWidth,innerHeight);
-
-  if(ps.length<50) burst();
-
-  ps.forEach(p=>{
-    if(p.phase==='out'){
-      p.dx*=0.985; p.dy*=0.985;
-      p.x+=p.dx*dt; p.y+=p.dy*dt;
-      p.age+=dt;
-      if(p.age>0.6){ p.phase='in'; const t=toHeart(p); p.tx=t.x; p.ty=t.y; }
-    }else{
-      p.x += (p.tx-p.x)*dt*1.8;
-      p.y += (p.ty-p.y)*dt*1.8;
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mouse Hearts + Fireworks → Heart</title>
+  <style>
+    html,body{margin:0;height:100%;background:#000;overflow:hidden}
+    /* Canvas pháo hoa nền */
+    #fw{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
+    /* Tim emoji chạy theo chuột (overlay) */
+    .heart{
+      position:fixed;will-change:transform,opacity;pointer-events:none;font-size:16px;
+      filter:drop-shadow(0 0 4px rgba(255,120,160,.8));
+      z-index:2;
     }
-    const grd=g.createRadialGradient(p.x,p.y,0,p.x,p.y,6);
-    grd.addColorStop(0,`hsla(${p.h} 100% 60% / .9)`); grd.addColorStop(1,'transparent');
-    g.fillStyle=grd; g.beginPath(); g.arc(p.x,p.y,6,0,6.283); g.fill();
+  </style>
+</head>
+<body>
+  <canvas id="fw"></canvas>
+
+  <script>
+  /* ========= LAYER 1: Fireworks → Heart (canvas nền) ========= */
+  const cvs = document.getElementById('fw');
+  const g   = cvs.getContext('2d');
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+  function resize(){
+    cvs.width  = innerWidth  * DPR;
+    cvs.height = innerHeight * DPR;
+    g.setTransform(DPR,0,0,DPR,0,0);
+  }
+  addEventListener('resize', resize); resize();
+
+  function heartParam(t){
+    // trả về [x,y] theo công thức trái tim
+    return [16*Math.sin(t)**3, 13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t)];
+  }
+  const cx = ()=> innerWidth/2;
+  const cy = ()=> innerHeight/2;
+  const S  = ()=> Math.min(innerWidth, innerHeight) / 34;
+
+  class Particle {
+    constructor(x,y,dx,dy,h){
+      this.x=x; this.y=y; this.dx=dx; this.dy=dy;
+      this.h=h; this.age=0; this.phase='out';
+    }
+  }
+
+  function targetOnHeart(){
+    const t = Math.random()*Math.PI*2;
+    const [hx,hy] = heartParam(t);
+    const s = S();
+    return { x: cx()+hx*s, y: cy()-hy*s };
+  }
+
+  // burst: nếu truyền toạ độ sẽ nổ tại điểm đó, nếu không sẽ random gần giữa
+  function burst(px=null, py=null){
+    const x = px ?? (cx()+(Math.random()-.5)*100);
+    const y = py ?? (cy()+(Math.random()-.5)*80);
+    const hue = Math.floor(Math.random()*360);
+    for(let i=0;i<200;i++){
+      const a = Math.random()*Math.PI*2;
+      const v = 80 + Math.random()*140;
+      particles.push(new Particle(x,y,Math.cos(a)*v,Math.sin(a)*v,hue));
+    }
+  }
+
+  let particles = [];
+  burst(); // nổ khởi động
+  let last = performance.now();
+
+  function fireworksLoop(now){
+    requestAnimationFrame(fireworksLoop);
+    const dt = Math.min(0.032, (now-last)/1000);
+    last = now;
+
+    // nền mờ dần để tạo vệt
+    g.fillStyle = "rgba(0,0,0,.25)";
+    g.fillRect(0,0,innerWidth,innerHeight);
+
+    // nếu gần hết hạt thì nổ thêm
+    if(particles.length < 50) burst();
+
+    particles.forEach(p=>{
+      if(p.phase === 'out'){
+        p.dx *= 0.985; p.dy *= 0.985;
+        p.x += p.dx*dt; p.y += p.dy*dt;
+        p.age += dt;
+        if(p.age > 0.6){
+          p.phase='in';
+          const t = targetOnHeart();
+          p.tx=t.x; p.ty=t.y;
+        }
+      }else{
+        // hút về điểm trên hình trái tim
+        p.x += (p.tx - p.x) * dt * 1.8;
+        p.y += (p.ty - p.y) * dt * 1.8;
+      }
+
+      const rad = 6;
+      const grd = g.createRadialGradient(p.x,p.y,0,p.x,p.y,rad);
+      grd.addColorStop(0,`hsla(${p.h} 100% 60% / .9)`);
+      grd.addColorStop(1,'transparent');
+      g.fillStyle = grd;
+      g.beginPath(); g.arc(p.x,p.y,rad,0,Math.PI*2); g.fill();
+    });
+
+    // loại bỏ hạt đã tới đích
+    particles = particles.filter(p => !(p.phase==='in' && Math.hypot(p.x-p.tx,p.y-p.ty) < 1));
+  }
+  requestAnimationFrame(fireworksLoop);
+
+  // click để nổ pháo hoa tại vị trí click
+  addEventListener('click', e => {
+    const x = e.clientX, y = e.clientY;
+    burst(x, y);
   });
-  ps = ps.filter(p=>!(p.phase==='in' && Math.hypot(p.x-p.tx,p.y-p.ty)<1));
-}
-loop(performance.now());
-</script></body></html>
+
+  /* ========= LAYER 2: Mouse Trail Hearts (emoji overlay) ========= */
+  const EMOJIS = ['💖','💝','💘','💗','💓','🩷'];
+  function spawnHeart(x,y){
+    const el = document.createElement('div');
+    el.className = 'heart';
+    el.textContent = EMOJIS[Math.random()*EMOJIS.length|0];
+    const s = 14 + Math.random()*20;
+    el.style.fontSize = s + 'px';
+    document.body.appendChild(el);
+
+    const dx=(Math.random()-.5)*80, dy=-60-Math.random()*60, rot=(Math.random()-.5)*60;
+    const dur=800+Math.random()*600, start=performance.now();
+
+    (function anim(t){
+      const p = Math.min(1, (t-start)/dur);
+      const ease = 1 - (1-p)*(1-p); // ease-out
+      el.style.transform = `translate(${x+dx*ease}px,${y+dy*ease}px) rotate(${rot*ease}deg)`;
+      el.style.opacity   = String(1-p);
+      if(p<1) requestAnimationFrame(anim); else el.remove();
+    })(start);
+  }
+
+  addEventListener('pointermove', e => spawnHeart(e.clientX, e.clientY));
+  addEventListener('click',       e => spawnHeart(e.clientX, e.clientY));
+  </script>
+</body>
+</html>
