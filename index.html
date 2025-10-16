@@ -7,11 +7,11 @@
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#000}
 
-  /* ===== Panel gốc (đã Việt hoá) ===== */
+  /* ===== Panel gốc của bạn ===== */
   #ui{
     position:fixed;left:12px;top:12px;z-index:9;
     background:rgba(20,20,20,.55);border:1px solid #2a2a2a;border-radius:10px;
-    padding:10px;color:#ddd;font:12px/1.2 system-ui,Arial;min-width:300px
+    padding:10px;color:#ddd;font:12px/1.2 system-ui,Arial;min-width:260px
   }
   #ui .row{display:flex;gap:8px;align-items:center;margin:6px 0}
   #ui input[type=range]{flex:1}
@@ -30,32 +30,28 @@
   .love-svg{position:absolute;inset:0;z-index:2}
   .love-mo{width:100%;height:100%}
 
-  /* Màu chữ/viền để nổi trên nền đen */
+  /* Style từ demo gốc, tinh chỉnh màu để nổi trên nền đen */
   .love-line{fill:none;stroke:#ffffff;stroke-width:8;stroke-linecap:round;stroke-miterlimit:10}
-  .love-letter{fill:#f2a9ff}
-  /* ĐÃ BỎ .love-sound (không còn phần tử/âm thanh) */
+  .love-letter{fill:#f2a9ff} /* tím hồng sáng hơn cho nền đen */
+  .love-sound{
+    position:fixed;color:#f2a9ff;font-size:14px;bottom:10px;right:12px;
+    text-decoration:underline;cursor:default;z-index:25;pointer-events:auto; /* cho phép click */
+  }
+  .love-sound.sound--off{text-decoration:line-through}
 </style>
 </head>
 <body>
-<!-- ===== Panel điều khiển (đã Việt hoá + thêm HEART_POINT_COUNT) ===== -->
+<!-- ===== Panel điều khiển gốc ===== -->
 <div id="ui">
   <div><b>3D Heart Vortex</b></div>
-  <div class="row"><span style="width:130px">Độ hút (Strength)</span> <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.0"></div>
-  <div class="row"><span style="width:130px">Kích thước tim</span> <input id="hsize" type="range" min="1.6" max="4.0" step="0.1" value="2.6"></div>
-  <div class="row"><span style="width:130px">Giữ tại hình (giây)</span> <input id="hold" type="range" min="1" max="8" step="0.5" value="3.5"></div>
-  <div class="row"><span style="width:130px">% viền (Edge)</span> <input id="edge" type="range" min="0" max="80" step="5" value="40"></div>
-
-  <!-- Mới: thanh chỉnh số điểm tạo hình tim (HEART_POINT_COUNT) -->
-  <div class="row">
-    <span style="width:130px">Điểm hình tim</span>
-    <input id="hpoints" type="range" min="200" max="3600" step="50" value="2600">
-    <span id="hpoints-val" style="width:68px;text-align:right">2,600</span>
-  </div>
-
-  <div class="row">Hình sprite:
-    <label><input type="radio" name="shape" value="heart" checked> Trái tim ❤</label>
-    <label><input type="radio" name="shape" value="circle"> Tròn ●</label>
-    <span style="margin-left:auto">Tổng hạt: <span id="pcnt"></span></span>
+  <div class="row"><span style="width:86px">Độ đẩy</span> <input id="strength" type="range" min="0.6" max="2.0" step="0.05" value="1.0"></div>
+  <div class="row"><span style="width:86px">Kích thước hạt</span> <input id="hsize" type="range" min="1.6" max="4.0" step="0.1" value="2.6"></div>
+  <div class="row"><span style="width:86px">Thời gian giữ (s)</span> <input id="hold" type="range" min="1" max="8" step="0.5" value="3.5"></div>
+  <div class="row"><span style="width:86px">% Viền</span> <input id="edge" type="range" min="0" max="80" step="5" value="40"></div>
+  <div class="row">Shape:
+    <label><input type="radio" name="shape" value="Trái tim" checked> ❤</label>
+    <label><input type="radio" name="shape" value="Hình tròn"> ●</label>
+    <span style="margin-left:auto">Số lượng hạt: <span id="pcnt"></span></span>
   </div>
 </div>
 
@@ -68,20 +64,20 @@
       <g>
         <path class="love-letter love-letter--I" d="M42.2,73.9h11.4v52.1H42.2V73.9z"></path>
         <path class="love-letter love-letter--L" d="M85.1,73.9h11.4v42.1h22.8v10H85.1V73.9z"></path>
-        <path class="love-letter love-letter--O" d="M150.9,100c0-15.2,11.7-26.9,27.2-26.9s27.2,11.7,27.2,26.9s-11.7,26.9-27.2,26.9S150.9,115.2,150.9,100zM193.9,100c0-9.2-6.8-16.5-15.8-16.5c-9,0-15.8,7.3-15.8,16.5s6.8,16.5,15.8,16.5C187.1,116.5,193.9,109.2,193.9,100z"></path>
+        <path class="love-letter love-letter--O" d="M123.9,100c0-15.2,11.7-26.9,27.2-26.9s27.2,11.7,27.2,26.9s-11.7,26.9-27.2,26.9S123.9,115.2,123.9,100zM166.9,100c0-9.2-6.8-16.5-15.8-16.5c-9,0-15.8,7.3-15.8,16.5s6.8,16.5,15.8,16.5C160.1,116.5,166.9,109.2,166.9,100z"></path>
         <path class="love-letter love-letter--V" d="M180.7,73.9H193l8.4,22.9c1.7,4.7,3.5,9.5,5,14.2h0.1c1.7-4.8,3.4-9.4,5.2-14.3l8.6-22.8h11.7l-19.9,52.1h-11.5L180.7,73.9z"></path>
         <path class="love-letter love-letter--E" d="M239.1,73.9h32.2v10h-20.7v10.2h17.9v9.5h-17.9v12.4H272v10h-33V73.9z"></path>
         <path class="love-letter love-letter--Y" d="M315.8,102.5l-20.1-28.6H309l6.3,9.4c2,3,4.2,6.4,6.3,9.6h0.1c2-3.2,4.1-6.4,6.3-9.6l6.3-9.4h12.9l-19.9,28.5v23.6h-11.4V102.5z"></path>
-        <path class="love-letter love-letter--O2" d="M348.8,100c0-15.2,11.7-26.9,27.2-26.9c15.5,0,27.2,11.7,27.2,26.9s-11.7,26.9-27.2,26.9c-15.5,0-27.2-11.7-27.2-26.9z M391.8,100c0-9.2-6.8-16.5-15.8-16.5c-9,0-15.8,7.3-15.8,16.5s6.8,16.5,15.8,16.5c9,0,15.8-7.3,15.8-16.5z"></path>
-        <path class="love-letter love-letter--U" d="M412.4,101.1V73.9h11.4v26.7c0,10.9,2.4,15.9,11.5,15.9c8.4,0,11.4-4.6,11.4-15.8V73.9h11v26.9c0,7.8-1.1,13.5-4,17.7c-3.7,5.3-10.4,8.4-18.7,8.4c-8.4,0-15.1-3.1-18.8-8.5c-3.9-4.3-4.9-9.9-4.9-16.3z"></path>
+        <path class="love-letter love-letter--O2" d="M348.8,100c0-15.2,11.7-26.9,27.2-26.9c15.5,0,27.2,11.7,27.2,26.9s-11.7,26.9-27.2,26.9C360.5,126.9,348.8,115.2,348.8,100z M391.8,100c0-9.2-6.8-16.5-15.8-16.5c-9,0-15.8,7.3-15.8,16.5s6.8,16.5,15.8,16.5C385,116.5,391.8,109.2,391.8,100z"></path>
+        <path class="love-letter love-letter--U" d="M412.4,101.1V73.9h11.4v26.7c0,10.9,2.4,15.9,11.5,15.9c8.4,0,11.4-4.6,11.4-15.8V73.9h11v26.9c0,7.8-1.1,13.5-4,17.7c-3.7,5.3-10.4,8.4-18.7,8.4c-8.4,0-15.1-3.1-18.8-8.5C413.4,114.2,412.4,108.5,412.4,101.1z"></path>
       </g>
     </svg>
     <div class="love-mo"></div>
   </div>
 </div>
-<!-- ĐÃ BỎ <div class="love-sound">sound</div> -->
+<div class="love-sound">sound</div>
 
-<!-- ===== Three.js (gốc) ===== -->
+<!-- ===== Three.js (gốc của bạn) ===== -->
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 
 <!-- ===== mo.js cho hiệu ứng chữ ===== -->
@@ -203,8 +199,6 @@ const strengthEl=document.getElementById('strength');
 const sizeEl=document.getElementById('hsize');
 const holdEl=document.getElementById('hold');
 const edgeEl=document.getElementById('edge');
-const hpointsEl=document.getElementById('hpoints');
-const hpointsVal=document.getElementById('hpoints-val');
 
 function animate(now){
   requestAnimationFrame(animate);
@@ -289,14 +283,6 @@ sizeEl.oninput=()=>{
 edgeEl.oninput=()=>{
   heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
 };
-
-/* mới: cập nhật số điểm hình tim */
-hpointsEl.oninput=()=>{
-  HEART_POINT_COUNT = Math.max(200, Math.min(3600, parseInt(hpointsEl.value||HEART_POINT_COUNT,10)));
-  hpointsVal.textContent = HEART_POINT_COUNT.toLocaleString();
-  heartTargets = buildHeartTargets(HEART_POINT_COUNT, HEART_SCALE, HEART_YOFFSET, parseFloat(edgeEl.value));
-};
-
 requestAnimationFrame(animate);
 addEventListener('resize', ()=>{
   renderer.setSize(innerWidth, innerHeight);
@@ -320,11 +306,11 @@ addEventListener('resize', ()=>{
     u: qs('.love-letter--U'),
     lineLeft: qs('.love-line--left'),
     lineRight: qs('.love-line--rght'),
-
-    /* BỎ SOUND: thay bằng object rỗng để không phát âm thanh */
-    blup: { play:()=>{}, volume:0 },
-    blop: { play:()=>{}, volume:0 }
-    // Không còn thuộc tính .sound, không còn toggle click
+    blup: new Audio('https://www.freesound.org/data/previews/265/265115_4373976-lq.mp3'),
+    blop: new Audio('https://www.freesound.org/data/previews/265/265115_4373976-lq.mp3'),
+    sound: qs('.love-sound'),
+    colTxt: "#f2a9ff",   // tím hồng sáng
+    colHeart: "#fa4843"  // đỏ trái tim
   };
 
   class Heart extends mojs.CustomShape {
@@ -336,12 +322,12 @@ addEventListener('resize', ()=>{
   const crtBoom = (delay=0, x=0, rd=46) => {
     const parent = loveEl.container;
     const crcl = new mojs.Shape({
-      shape:'circle',fill:'none',stroke:'#f2a9ff',strokeWidth:{5:0},
+      shape:'circle',fill:'none',stroke:loveEl.colTxt,strokeWidth:{5:0},
       radius:{[rd]:[rd+20]},easing:'quint.out',duration:500/3,parent,delay,x
     });
     const brst = new mojs.Burst({
       radius:{[rd+15]:110}, angle:'rand(60,180)', count:3, timeline:{delay}, parent, x,
-      children:{ radius:[5,3,7], fill:'#f2a9ff', scale:{1:0, easing:'quad.in'},
+      children:{ radius:[5,3,7], fill:loveEl.colTxt, scale:{1:0, easing:'quad.in'},
         pathScale:[.8,null], degreeShift:['rand(13,60)',null], duration:1000/3, easing:'quint.out'}
     });
     return [crcl, brst];
@@ -361,7 +347,7 @@ addEventListener('resize', ()=>{
         },
         onComplete: ()=>{
           [loveEl.l,loveEl.o,loveEl.v,loveEl.e].forEach(n=>n.style.opacity=0);
-          /* sound removed */
+          loveEl.blop.play();
         }
       }),
 
@@ -369,18 +355,18 @@ addEventListener('resize', ()=>{
         duration: move*2 + boom,
         onComplete: ()=>{
           [loveEl.y,loveEl.o2].forEach(n=>n.style.opacity=0);
-          /* sound removed */
+          loveEl.blop.play();
         }
       }),
 
       new mojs.Tween({
         duration: move*3 + boom*2 - delta,
-        onComplete: ()=>{ loveEl.i.style.opacity=0; /* sound removed */ }
+        onComplete: ()=>{ loveEl.i.style.opacity=0; loveEl.blop.play(); }
       }),
 
       new mojs.Tween({
         duration: move*3 + boom*2,
-        onComplete: ()=>{ loveEl.u.style.opacity=0; /* sound removed */ }
+        onComplete: ()=>{ loveEl.u.style.opacity=0; loveEl.blup.play(); }
       }),
 
       new mojs.Tween({
@@ -435,7 +421,7 @@ addEventListener('resize', ()=>{
         .then({duration:move, easing, x:{to:-32-21-36-31-27}}),
 
       new mojs.Shape({
-        parent: loveEl.container, shape:'heart', delay:move, fill:'#fa4843',
+        parent: loveEl.container, shape:'heart', delay:move, fill:loveEl.colHeart,
         x:-64, scale:{0:0.95, easing: mojs.easing.path('M0,100C2.9,86.7,33.6-7.3,46-7.3s15.2,22.7,26,22.7S89,0,100,0')},
         duration:500
       })
@@ -460,7 +446,18 @@ addEventListener('resize', ()=>{
   const loveTl = crtLoveTl().play();
   setInterval(()=>loveTl.replay(), 4300);
 
-  /* SOUND: đã loại bỏ hoàn toàn (không tạo Audio, không volume, không toggle) */
+  const volume = 0.2;
+  loveEl.blup.volume = volume; loveEl.blop.volume = volume;
+
+  const toggleSound = (()=> {
+    let on = true;
+    return ()=>{
+      if(on){ loveEl.blup.volume=0; loveEl.blop.volume=0; loveEl.sound.classList.add('sound--off'); }
+      else  { loveEl.blup.volume=volume; loveEl.blop.volume=volume; loveEl.sound.classList.remove('sound--off'); }
+      on = !on;
+    };
+  })();
+  loveEl.sound.addEventListener('click', toggleSound);
 })();
 </script>
 </body>
